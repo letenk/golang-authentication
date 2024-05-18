@@ -3,6 +3,8 @@ package main
 import (
 	"database/sql"
 	"flag"
+	"fmt"
+	"github.com/letenk/golang-authentication/configs/credential"
 	"log"
 	"os"
 
@@ -10,10 +12,13 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
+const (
+	fileCredentialType = ".env"
+)
+
 var (
-	flags    = flag.NewFlagSet("goose", flag.ExitOnError)
-	dir      = flags.String("dir", "./migrations", "directory with migration files")
-	dbSource = "postgres://secret:secret@localhost:5433/authentication?sslmode=disable"
+	flags = flag.NewFlagSet("goose", flag.ExitOnError)
+	dir   = flags.String("dir", "./migrations", "directory with migration files")
 )
 
 func main() {
@@ -58,6 +63,7 @@ func main() {
 		log.Fatalf("%q driver not supported\n", driver)
 	}
 
+	dbSource := migrationConnection()
 	db, err := sql.Open(driver, dbSource)
 	if err != nil {
 		log.Fatalf("-dbstring=%q: %v\n", dbSource, err)
@@ -70,6 +76,30 @@ func usage() {
 	log.Print(usagePrefix)
 	flags.PrintDefaults()
 	log.Print(usageCommands)
+}
+
+func migrationConnection() string {
+
+	cred := credential.GetCredential()
+	cred.AddConfigPath(".")
+	cred.SetConfigFile(fileCredentialType)
+
+	log.Printf("credential file : " + cred.ConfigFileUsed())
+	err := cred.ReadInConfig()
+	if err != nil {
+		panic(err)
+	}
+
+	dsn := fmt.Sprintf("%s:%s@%s:%s/%s?sslmode=disable",
+		cred.Get("db.configs.username"),
+		cred.Get("db.configs.password"),
+		cred.Get("db.configs.host"),
+		cred.Get("db.configs.port"),
+		cred.Get("db.configs.database"),
+	)
+
+	return dsn
+
 }
 
 func executeCommand(args []string, command string, db *sql.DB) {
