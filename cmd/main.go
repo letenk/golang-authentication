@@ -10,23 +10,24 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	"github.com/letenk/golang-authentication/configs"
+	"github.com/letenk/golang-authentication/configs/credential"
 	"github.com/letenk/golang-authentication/configs/database"
 )
 
 func main() {
+	e := echo.New()
 
-	if err := configs.LoadConfig(); err != nil {
-		log.Fatal("Failed to load configuration:", err)
-	}
+	credential.InitCredentialEnv(e)
 
 	if err := database.InitDBPostgresSQL(); err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}
 
-	defer database.CloseDatabase()
-
-	e := echo.New()
+	defer func() {
+        log.Println("Closing database connection...")
+        defer database.CloseDatabase()
+        log.Println("Database connection closed")
+    }()
 
 	// Middleware
  	e.Use(middleware.RequestID())
@@ -34,22 +35,20 @@ func main() {
         Format: "[${time_rfc3339}] ${status} ${method} ${uri} (${latency_human}) ${error}\n",
     }))
 	e.Use(middleware.Recover())
-	e.Use(middleware.CORS()) 
+	e.Use(middleware.CORS())
  	e.Use(middleware.Secure())
 
   	setupRoutes(e)
 
-   	cfg := configs.GetConfig()
-
 	// Graceful shutdown
 	go func() {
   		log.Printf("🚀 %s server started on port %s (env: %s)",
-            cfg.App.Name,
-            cfg.App.Port,
-            cfg.App.Env,
+            credential.GetString("APP_NAME"),
+            credential.GetString("APP_ENV"),
+            credential.GetString("APP_PORT"),
         )
 
-		if err := e.Start(":" + cfg.App.Port); err != nil {
+		if err := e.Start(":" + credential.GetString("APP_PORT")); err != nil {
 			log.Println("Shutting down the server")
 		}
 	}()
@@ -82,12 +81,10 @@ func healthCheckHandler(c echo.Context) error {
         })
     }
 
-    cfg := configs.GetConfig()
-
     return c.JSON(200, map[string]interface{}{
         "status":  "healthy",
-        "service": cfg.App.Name,
-        "env":     cfg.App.Env,
+        "service": credential.GetString("APP_NAME"),
+        "env":     credential.GetString("APP_ENV"),
     })
 }
 

@@ -7,24 +7,22 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/letenk/golang-authentication/configs"
+	"github.com/letenk/golang-authentication/configs/credential"
 )
 
 var DB *pgxpool.Pool
 
 func InitDBPostgresSQL() error {
-	
-	cfg := configs.GetConfig()
-	
+
 	// Build a connection value from environment variable
 	dsn := fmt.Sprintf(
 		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
-  		cfg.Database.Host,
-        cfg.Database.Port,
-        cfg.Database.User,
-        cfg.Database.Password,
-        cfg.Database.Name,
-        cfg.Database.SSLMode,
+		credential.GetString("DB_HOST"),
+		credential.GetString("DB_PORT"),
+		credential.GetString("DB_USER"),
+		credential.GetString("DB_PASSWORD"),
+		credential.GetString("DB_NAME"),
+		credential.GetString("DB_SSLMODE"),
 	)
 
 	// poolConfig for connection pool
@@ -75,9 +73,9 @@ func HealthCheck() error {
     if DB == nil {
         return fmt.Errorf("database connection is nil")
     }
-    
+
     ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
     defer cancel()
-    
+
     return DB.Ping(ctx)
 }
