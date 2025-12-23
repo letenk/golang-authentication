@@ -33,8 +33,8 @@ func main() {
     e.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{
         Format: "[${time_rfc3339}] ${status} ${method} ${uri} (${latency_human}) ${error}\n",
     }))
-	e.Use(middleware.Recover()) // TODO: Question this function
-	e.Use(middleware.CORS())    // TODO: Question this function
+	e.Use(middleware.Recover())
+	e.Use(middleware.CORS()) 
  	e.Use(middleware.Secure())
 
   	setupRoutes(e)
