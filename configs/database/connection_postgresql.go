@@ -57,12 +57,39 @@ func InitDBPostgresSQL() error {
 	return nil
 }
 
-// CloseDatabase closed connection pool with graceful
 func CloseDatabase() {
-	if DB != nil {
-		DB.Close()
-		log.Println("Database connection closed")
-	}
+    if DB == nil {
+        log.Println("Database already closed or never initialized")
+        return
+    }
+
+    log.Println("Initiating database connection closure...")
+
+    stat := DB.Stat()
+    log.Printf("Connection pool stats before close - Total: %d, Idle: %d, Acquired: %d",
+        stat.TotalConns(),
+        stat.IdleConns(),
+        stat.AcquiredConns(),
+    )
+
+    // Close with timeout
+    done := make(chan struct{})
+
+    go func() {
+        DB.Close()
+        close(done)
+    }()
+
+    select {
+    case <-done:
+        log.Println("Database connection closed successfully")
+    case <-time.After(5 * time.Second):
+        log.Println("Database close timeout after 5 seconds")
+        log.Println("Some connections might still be active, forcing shutdown")
+    }
+
+    // Set nil for safety
+    DB = nil
 }
 
 func GetDB() *pgxpool.Pool {
