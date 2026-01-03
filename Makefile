@@ -1,0 +1,59 @@
+# Build once, reuse
+.PHONY: run build migration-build migration-create migration-up migration-down migration-status
+
+run:
+	go run cmd/main.go
+
+build:
+	go build -o main cmd/main.go
+
+# Build migration binary (only when needed)
+migration-build:
+	@echo "Building migration binary..."
+	go build -v -o migration migrations/cmd/main.go
+	@echo "✅ Migration binary built successfully"
+
+# Create new migration
+migration-create:
+	@if [ ! -f migration ]; then $(MAKE) migration-build; fi
+	./migration create $(name) $(type)
+
+# Run migrations up
+migration-up:
+	@if [ ! -f migration ]; then $(MAKE) migration-build; fi
+	./migration postgres up
+
+# Rollback migration
+migration-down:
+	@if [ ! -f migration ]; then $(MAKE) migration-build; fi
+	./migration postgres down
+
+# Check migration status
+migration-status:
+	@if [ ! -f migration ]; then $(MAKE) migration-build; fi
+	./migration postgres status
+
+# Show current migration version
+migration-version:
+	@if [ ! -f migration ]; then $(MAKE) migration-build; fi
+	./migration postgres version
+
+# Clean built binaries
+clean:
+	rm -f main migration
+	@echo "✅ Cleaned binaries"
+
+# Help command
+help:
+	@echo "Available commands:"
+	@echo "  make build              - Build main application"
+	@echo "  make run                - Run application"
+	@echo "  make migration-build    - Build migration binary"
+	@echo "  make migration-create   - Create new migration (name=xxx type=sql)"
+	@echo "  make migration-up       - Run all pending migrations"
+	@echo "  make migration-down     - Rollback last migration"
+	@echo "  make migration-status   - Show migration status"
+	@echo "  make migration-version  - Show current migration version"
+	@echo "  make clean              - Remove built binaries"
+
+.DEFAULT_GOAL := help

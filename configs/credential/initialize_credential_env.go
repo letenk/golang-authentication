@@ -2,9 +2,9 @@ package credential
 
 import (
 	"flag"
+	"fmt"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/labstack/echo/v4"
 	"github.com/labstack/gommon/log"
 	"github.com/spf13/viper"
 )
@@ -15,7 +15,7 @@ const (
 	fileCredentialType        = "env"
 )
 
-func InitCredentialEnv(e *echo.Echo) {
+func InitCredentialEnv() error {
 
 	var credentialConfigPath string
 	flag.StringVar(&credentialConfigPath, "credentials-path", pathCredentialNameDefault, "your credential credentials path config, default /credential")
@@ -33,18 +33,16 @@ func InitCredentialEnv(e *echo.Echo) {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			log.Warn("No .env file found, using defaults and environment variables")
 		} else {
-			e.Logger.Fatal("Error reading config file:", err)
-			panic(err)
+			return fmt.Errorf("read config failed: %w", err)
 		}
 	}
 
- 	// Validate required configs
-    if err := ValidateRequiredConfig(); err != nil {
-        e.Logger.Fatal("Config validation failed:", err)
-        panic(err)
-    }
+	// Validate required configs
+	if err := ValidateRequiredConfig(); err != nil {
+		return fmt.Errorf("config validation failed: %w", err)
+	}
 
-    log.Info("Config validation passed!")
+	log.Info("Config validation passed!")
 
 	initDefaultCredential()
 
@@ -55,6 +53,8 @@ func InitCredentialEnv(e *echo.Echo) {
 	})
 
 	log.Infof("initialized configs viper: success : credential")
+
+	return nil
 }
 
 func initDefaultCredential() {

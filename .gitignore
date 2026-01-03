@@ -1,1 +1,7 @@
+.vscode
 .env
+
+main
+migration
+
+/migration
