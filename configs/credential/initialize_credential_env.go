@@ -3,6 +3,7 @@ package credential
 import (
 	"flag"
 	"fmt"
+	"strings"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/labstack/gommon/log"
@@ -18,11 +19,14 @@ const (
 func InitCredentialEnv() error {
 
 	var credentialConfigPath string
-	flag.StringVar(&credentialConfigPath, "credentials-path", pathCredentialNameDefault, "your credential credentials path config, default /credential")
-
+	flag.StringVar(&credentialConfigPath, "credentials-path", pathCredentialNameDefault, "credential config path")
 	flag.Parse()
 
 	credential := GetCredential()
+
+	credential.AutomaticEnv()
+	credential.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+
 	credential.SetConfigName(fileCredentialName)
 	credential.AddConfigPath(credentialConfigPath)
 	credential.SetConfigType(fileCredentialType)
@@ -32,6 +36,7 @@ func InitCredentialEnv() error {
 	if err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			log.Warn("No .env file found, using defaults and environment variables")
+			initDefaultCredential()
 		} else {
 			return fmt.Errorf("read config failed: %w", err)
 		}
@@ -43,8 +48,6 @@ func InitCredentialEnv() error {
 	}
 
 	log.Info("Config validation passed!")
-
-	initDefaultCredential()
 
 	credential.WatchConfig()
 	log.Infof("initialized WatchConfig(): success : credential")
@@ -60,17 +63,17 @@ func InitCredentialEnv() error {
 func initDefaultCredential() {
 	credential := GetCredential()
 
-	credential.SetDefault("APP_NAME", "auth-system")
-	credential.SetDefault("APP_ENV", "development")
-	credential.SetDefault("APP_PORT", "8080")
+	credential.SetDefault("application.name", "auth-system")
+	credential.SetDefault("application.mode", "dev")
+	credential.SetDefault("application.port", "8080")
 
-	credential.SetDefault("DB_HOST", "localhost")
-	credential.SetDefault("DB_PORT", "5432")
-	credential.SetDefault("DB_SSLMODE", "disable")
+	credential.SetDefault("db.configs.host", "localhost")
+	credential.SetDefault("db.configs.port", "5432")
+	credential.SetDefault("db.configs.sslmode", "disable")
 
-	credential.SetDefault("JWT_ACCESS_TOKEN_EXPIRE", "15m")
-	credential.SetDefault("JWT_REFRESH_TOKEN_EXPIRE", "7d")
+	credential.SetDefault("auth.jwt.access_token_expire", "15m")
+	credential.SetDefault("auth.jwt.refresh_token_expire", "7d")
 
-	credential.SetDefault("OTP_EXPIRE", "5m")
-	credential.SetDefault("OTP_LENGTH", 5)
+	credential.SetDefault("auth.otp.expire", "5m")
+	credential.SetDefault("auth.otp.length", 5)
 }

@@ -3,13 +3,16 @@ module github.com/letenk/golang-authentication
 go 1.25.3
 
 require (
+	github.com/aarondl/opt v0.0.0-20250607033636-982744e1bd65
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/jackc/pgx/v5 v5.7.6
+	github.com/jaswdr/faker/v2 v2.9.1
 	github.com/labstack/echo/v4 v4.14.0
 	github.com/lib/pq v1.10.9
 	github.com/mattn/go-sqlite3 v1.14.33
 	github.com/pressly/goose/v3 v3.26.0
 	github.com/spf13/viper v1.21.0
+	github.com/stephenafamo/bob v0.42.0
 	github.com/ziutek/mymysql v1.5.4
 )
 
@@ -42,11 +45,9 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
-	github.com/aarondl/opt v0.0.0-20250607033636-982744e1bd65 // indirect
 	github.com/mfridman/interpolate v0.0.2 // indirect
 	github.com/qdm12/reprint v0.0.0-20200326205758-722754a53494 // indirect
 	github.com/sethvargo/go-retry v0.3.0 // indirect
-	github.com/stephenafamo/bob v0.42.0 // indirect
 	github.com/stephenafamo/scan v0.7.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 )

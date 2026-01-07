@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"log"
+	"math/rand/v2"
 	"os"
 	"os/signal"
 	"syscall"
@@ -10,6 +10,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/labstack/gommon/log"
 	"github.com/letenk/golang-authentication/configs/credential"
 	"github.com/letenk/golang-authentication/configs/database"
 )
@@ -22,15 +23,19 @@ func main() {
 		panic(err)
 	}
 
-	if err := database.InitDBPostgresSQL(); err != nil {
+	dbConnection, err := database.NewSqlBobClient()
+	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}
 
-	defer func() {
-		log.Println("Closing database connection...")
-		defer database.CloseDatabase()
-		log.Println("Database connection closed")
-	}()
+	log.Info("initialized database configuration=", dbConnection)
+
+	defer func(dbConnection *database.BobDB) {
+		err := dbConnection.DB.Close()
+		if err != nil {
+			log.Fatalf("error initialized database configuration=", err)
+		}
+	}(dbConnection)
 
 	// Middleware
 	e.Use(middleware.RequestID())
@@ -41,18 +46,18 @@ func main() {
 	e.Use(middleware.CORS())
 	e.Use(middleware.Secure())
 
-	setupRoutes(e)
+	setupRoutes(e, dbConnection)
 
 	// Graceful shutdown
 	go func() {
 		log.Printf("🚀 %s server started on port %s (env: %s)",
-			credential.GetString("APP_NAME"),
-			credential.GetString("APP_ENV"),
-			credential.GetString("APP_PORT"),
+			credential.GetString("application.name"),
+			credential.GetString("application.env"),
+			credential.GetString("application.port"),
 		)
 
-		if err := e.Start(":" + credential.GetString("APP_PORT")); err != nil {
-			log.Println("Shutting down the server")
+		if err := e.Start(":" + credential.GetString("application.port")); err != nil {
+			log.Info("Shutting down the server")
 		}
 	}()
 
@@ -60,9 +65,9 @@ func main() {
 }
 
 // setupRoutes setup routing application
-func setupRoutes(e *echo.Echo) {
+func setupRoutes(e *echo.Echo, db *database.BobDB) {
 	// Health check endpoint
-	e.GET("/health", healthCheckHandler)
+	e.GET("/health", healthCheckHandler(db))
 
 	// API v1 group
 	v1 := e.Group("/api/v1")
@@ -75,20 +80,25 @@ func setupRoutes(e *echo.Echo) {
 }
 
 // healthCheckHandler endpoint for monitoring
-func healthCheckHandler(c echo.Context) error {
-	// Check database health
-	if err := database.HealthCheck(); err != nil {
-		return c.JSON(503, map[string]interface{}{
-			"status": "unhealthy",
-			"error":  "database connection failed",
+func healthCheckHandler(db *database.BobDB) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		if err := db.HealthCheck(c.Request().Context()); err != nil {
+			return c.JSON(503, map[string]interface{}{
+				"status": "unhealthy",
+				"error":  "database connection failed",
+			})
+		}
+
+		return c.JSON(200, map[string]interface{}{
+			"status":  "healthy",
+			"service": credential.GetString("application.name"),
+			"env":     credential.GetString("application.env"),
 		})
 	}
+}
 
-	return c.JSON(200, map[string]interface{}{
-		"status":  "healthy",
-		"service": credential.GetString("APP_NAME"),
-		"env":     credential.GetString("APP_ENV"),
-	})
+func randomNumber() int {
+	return rand.IntN(1000)
 }
 
 // gracefulShutdown handled graceful shutdown
@@ -98,7 +108,7 @@ func gracefulShutdown(e *echo.Echo) {
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	<-quit
 
-	log.Println("Shutting down server gracefully...")
+	log.Info("Shutting down server gracefully...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -108,5 +118,5 @@ func gracefulShutdown(e *echo.Echo) {
 		log.Fatal("Server forced to shutdown:", err)
 	}
 
-	log.Println("Server stopped gracefully")
+	log.Info("Server stopped gracefully")
 }

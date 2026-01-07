@@ -53,34 +53,34 @@ func GetInt(key string) int {
 }
 
 func GetStringWithDefault(key, defaultValue string) string {
-    value := GetString(key)
-    if value == "" {
-        return defaultValue
-    }
-    return value
+	value := GetString(key)
+	if value == "" {
+		return defaultValue
+	}
+	return value
 }
 
 func GetIntWithDefault(key string, defaultValue int) int {
-    value := GetInt(key)
-    if value == 0 {
-        return defaultValue
-    }
-    return value
+	value := GetInt(key)
+	if value == 0 {
+		return defaultValue
+	}
+	return value
 }
 
 func ValidateRequiredConfig() error {
-    required := []string{
-        "DB_USER",
-        "DB_PASSWORD", 
-        "DB_NAME",
-        "JWT_SECRET",
-    }
-    
-    for _, key := range required {
-        if GetString(key) == "" {
-            return fmt.Errorf("required config %s is not set", key)
-        }
-    }
-    
-    return nil
+	required := []string{
+		"db.configs.user",
+		"db.configs.password",
+		"db.configs.name",
+		"auth.jwt.secret",
+	}
+
+	for _, key := range required {
+		if GetString(key) == "" {
+			return fmt.Errorf("required config %s is not set", key)
+		}
+	}
+
+	return nil
 }
