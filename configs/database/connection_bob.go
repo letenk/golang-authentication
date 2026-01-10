@@ -21,15 +21,8 @@ type BobDB struct {
 func NewSqlBobClient() (*BobDB, error) {
 
 	// Build a connection value from environment variable
-	dsn := fmt.Sprintf(
-		"postgres://%s:%s@%s:%s/%s?sslmode=%s",
-		credential.GetString("db.configs.user"),
-		credential.GetString("db.configs.password"),
-		credential.GetString("db.configs.host"),
-		credential.GetString("db.configs.port"),
-		credential.GetString("db.configs.name"),
-		credential.GetString("db.configs.sslmode"),
-	)
+	cfg := credential.Config
+	dsn := cfg.GetDSNPostgreSQL()
 
 	log.Debug("DSN: ", dsn)
 
@@ -39,8 +32,8 @@ func NewSqlBobClient() (*BobDB, error) {
 	}
 
 	// Set pool
-	db.SetMaxIdleConns(credential.GetInt("db.configs.maxIdleConn"))
-	db.SetMaxOpenConns(credential.GetInt("db.configs.maxOpenConn"))
+	db.SetMaxIdleConns(cfg.Database.Configs.MaxIdleConn)
+	db.SetMaxOpenConns(cfg.Database.Configs.MaxOpenConn)
 	db.SetConnMaxLifetime(time.Hour)
 
 	if err := db.Ping(); err != nil {

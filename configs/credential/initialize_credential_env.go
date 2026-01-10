@@ -49,10 +49,22 @@ func InitCredentialEnv() error {
 
 	log.Info("Config validation passed!")
 
+	Config = &AppConfig{}
+	 if err := credential.Unmarshal(Config); err != nil {
+        return fmt.Errorf("failed to unmarshal config: %w", err)
+    }
+
 	credential.WatchConfig()
 	log.Infof("initialized WatchConfig(): success : credential")
 	credential.OnConfigChange(func(e fsnotify.Event) {
-		log.Infof("Config file changed:", e.Name)
+		log.Infof("Config file changed: %s", e.Name)
+
+		// Re-unmarshal on config change
+		if err := credential.Unmarshal(Config); err != nil {
+            log.Errorf("Failed to reload config: %v", err)
+        } else {
+            log.Info("Config reloaded successfully!")
+        }
 	})
 
 	log.Infof("initialized configs viper: success : credential")

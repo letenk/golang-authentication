@@ -13,6 +13,8 @@ type credential struct {
 
 var cred *credential
 
+var Config *AppConfig
+
 func init() {
 	cred = new(credential)
 	cred.vCredential = viper.New()
