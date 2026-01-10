@@ -1,8 +1,6 @@
 package credential
 
 import (
-	"fmt"
-
 	"github.com/spf13/cast"
 	"github.com/spf13/viper"
 )
@@ -68,21 +66,4 @@ func GetIntWithDefault(key string, defaultValue int) int {
 		return defaultValue
 	}
 	return value
-}
-
-func ValidateRequiredConfig() error {
-	required := []string{
-		"db.configs.user",
-		"db.configs.password",
-		"db.configs.name",
-		"auth.jwt.secret",
-	}
-
-	for _, key := range required {
-		if GetString(key) == "" {
-			return fmt.Errorf("required config %s is not set", key)
-		}
-	}
-
-	return nil
 }

@@ -30,7 +30,7 @@ func main() {
 
 	cfg := credential.Config
 
-	dbConnection, err := database.NewSqlBobClient()
+	dbConnection, err := database.NewSqlBobClient(&cfg.Database.Configs)
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}

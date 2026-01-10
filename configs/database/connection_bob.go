@@ -18,10 +18,9 @@ type BobDB struct {
 	Exec bob.Executor
 }
 
-func NewSqlBobClient() (*BobDB, error) {
+func NewSqlBobClient(cfg *credential.DBConnectionConfig) (*BobDB, error) {
 
 	// Build a connection value from environment variable
-	cfg := credential.Config
 	dsn := cfg.GetDSNPostgreSQL()
 
 	log.Debug("DSN: ", dsn)
@@ -32,8 +31,8 @@ func NewSqlBobClient() (*BobDB, error) {
 	}
 
 	// Set pool
-	db.SetMaxIdleConns(cfg.Database.Configs.MaxIdleConn)
-	db.SetMaxOpenConns(cfg.Database.Configs.MaxOpenConn)
+	db.SetMaxIdleConns(cfg.MaxIdleConn)
+	db.SetMaxOpenConns(cfg.MaxOpenConn)
 	db.SetConnMaxLifetime(time.Hour)
 
 	if err := db.Ping(); err != nil {
