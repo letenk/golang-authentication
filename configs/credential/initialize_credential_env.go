@@ -31,7 +31,7 @@ func InitCredentialEnv() error {
 	credential.AddConfigPath(credentialConfigPath)
 	credential.SetConfigType(fileCredentialType)
 
-	log.Debugf("credential file : " + credential.ConfigFileUsed())
+	log.Debugf("credential file :" + credential.ConfigFileUsed())
 	err := credential.ReadInConfig()
 	if err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {

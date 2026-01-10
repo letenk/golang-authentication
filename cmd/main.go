@@ -28,6 +28,8 @@ func main() {
 		panic(err)
 	}
 
+	cfg := credential.Config
+
 	dbConnection, err := database.NewSqlBobClient()
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
@@ -56,12 +58,12 @@ func main() {
 	// Graceful shutdown
 	go func() {
 		log.Printf("🚀 %s server started on port %s (env: %s)",
-			credential.GetString("application.name"),
-			credential.GetString("application.env"),
-			credential.GetString("application.port"),
+			cfg.Application.Name,
+			cfg.Application.Env,
+			cfg.Application.Port,
 		)
 
-		if err := e.Start(":" + credential.GetString("application.port")); err != nil {
+		if err := e.Start(":" + cfg.Application.Port); err != nil {
 			log.Info("Shutting down the server")
 		}
 	}()
