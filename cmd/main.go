@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -10,27 +9,42 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/labstack/gommon/log"
 	"github.com/letenk/golang-authentication/configs/credential"
 	"github.com/letenk/golang-authentication/configs/database"
+	customValidator "github.com/letenk/golang-authentication/configs/validator"
+	rest "github.com/letenk/golang-authentication/internal/adapter/rest"
 )
 
 func main() {
 	e := echo.New()
+
+	// Setup custom validator
+	e.Validator = customValidator.NewCustomValidator()
+
+	// Setup global HTTP error handler
+	customValidator.SetupGlobalHttpUnhandleErrors(e)
 
 	if err := credential.InitCredentialEnv(); err != nil {
 		e.Logger.Fatal(err)
 		panic(err)
 	}
 
-	if err := database.InitDBPostgresSQL(); err != nil {
+	cfg := credential.Config
+
+	dbConnection, err := database.NewSqlBobClient(&cfg.Database.Configs)
+	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}
 
-	defer func() {
-		log.Println("Closing database connection...")
-		defer database.CloseDatabase()
-		log.Println("Database connection closed")
-	}()
+	log.Info("initialized database configuration=", dbConnection)
+
+	defer func(dbConnection *database.BobDB) {
+		err := dbConnection.DB.Close()
+		if err != nil {
+			log.Fatalf("error initialized database configuration=", err)
+		}
+	}(dbConnection)
 
 	// Middleware
 	e.Use(middleware.RequestID())
@@ -41,72 +55,34 @@ func main() {
 	e.Use(middleware.CORS())
 	e.Use(middleware.Secure())
 
-	setupRoutes(e)
+	rest.SetupRouteHandler(e, dbConnection)
 
 	// Graceful shutdown
 	go func() {
 		log.Printf("🚀 %s server started on port %s (env: %s)",
-			credential.GetString("APP_NAME"),
-			credential.GetString("APP_ENV"),
-			credential.GetString("APP_PORT"),
+			cfg.Application.Name,
+			cfg.Application.Port,
+			cfg.Application.Env,
 		)
 
-		if err := e.Start(":" + credential.GetString("APP_PORT")); err != nil {
-			log.Println("Shutting down the server")
+		if err := e.Start(":" + cfg.Application.Port); err != nil {
+			log.Info("shutting down the server")
 		}
 	}()
 
 	gracefulShutdown(e)
 }
 
-// setupRoutes setup routing application
-func setupRoutes(e *echo.Echo) {
-	// Health check endpoint
-	e.GET("/health", healthCheckHandler)
-
-	// API v1 group
-	v1 := e.Group("/api/v1")
-
-	// Auth routes (akan ditambahkan nanti)
-	auth := v1.Group("/auth")
-	_ = auth // Avoid unused variable error
-	// auth.POST("/register", handler.Register)
-	// auth.POST("/login", handler.Login)
-}
-
-// healthCheckHandler endpoint for monitoring
-func healthCheckHandler(c echo.Context) error {
-	// Check database health
-	if err := database.HealthCheck(); err != nil {
-		return c.JSON(503, map[string]interface{}{
-			"status": "unhealthy",
-			"error":  "database connection failed",
-		})
-	}
-
-	return c.JSON(200, map[string]interface{}{
-		"status":  "healthy",
-		"service": credential.GetString("APP_NAME"),
-		"env":     credential.GetString("APP_ENV"),
-	})
-}
-
 // gracefulShutdown handled graceful shutdown
 func gracefulShutdown(e *echo.Echo) {
 	// Wait for interrupt signal
 	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
-
-	log.Println("Shutting down server gracefully...")
-
+	log.Info("Shutdown Server ...")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-
-	// Shutdown Echo server
 	if err := e.Shutdown(ctx); err != nil {
-		log.Fatal("Server forced to shutdown:", err)
+		log.Fatal(err)
 	}
-
-	log.Println("Server stopped gracefully")
 }

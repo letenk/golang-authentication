@@ -3,6 +3,7 @@ package credential
 import (
 	"flag"
 	"fmt"
+	"strings"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/labstack/gommon/log"
@@ -16,18 +17,27 @@ const (
 )
 
 func InitCredentialEnv() error {
-
 	var credentialConfigPath string
-	flag.StringVar(&credentialConfigPath, "credentials-path", pathCredentialNameDefault, "your credential credentials path config, default /credential")
-
+	flag.StringVar(
+		&credentialConfigPath, 
+		"credentials-path", 
+		pathCredentialNameDefault, 
+		"credential config path",
+	)
 	flag.Parse()
 
+	Config = NewAppConfig()
+
 	credential := GetCredential()
+
+	credential.AutomaticEnv()
+	credential.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+
 	credential.SetConfigName(fileCredentialName)
 	credential.AddConfigPath(credentialConfigPath)
 	credential.SetConfigType(fileCredentialType)
 
-	log.Debugf("credential file : " + credential.ConfigFileUsed())
+	log.Debugf("credential file :" + credential.ConfigFileUsed())
 	err := credential.ReadInConfig()
 	if err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
@@ -37,40 +47,37 @@ func InitCredentialEnv() error {
 		}
 	}
 
+	if err := credential.Unmarshal(Config); err != nil {
+        return fmt.Errorf("failed to unmarshal config: %w", err)
+    }
+
 	// Validate required configs
-	if err := ValidateRequiredConfig(); err != nil {
+	if err := Config.Validate(); err != nil {
 		return fmt.Errorf("config validation failed: %w", err)
 	}
 
 	log.Info("Config validation passed!")
 
-	initDefaultCredential()
-
 	credential.WatchConfig()
 	log.Infof("initialized WatchConfig(): success : credential")
 	credential.OnConfigChange(func(e fsnotify.Event) {
-		log.Infof("Config file changed:", e.Name)
+		log.Infof("Config file changed: %s", e.Name)
+
+		// Re-unmarshal on config change
+		if err := viper.Unmarshal(Config); err != nil {
+			log.Errorf("Failed to reload config: %v", err)
+			return
+		}
+
+		if err := Config.Validate(); err != nil {
+			log.Errorf("Config validation failed after reload: %v", err)
+			return
+		}
+
+		log.Info("Config reloaded successfully!")
 	})
 
 	log.Infof("initialized configs viper: success : credential")
 
 	return nil
-}
-
-func initDefaultCredential() {
-	credential := GetCredential()
-
-	credential.SetDefault("APP_NAME", "auth-system")
-	credential.SetDefault("APP_ENV", "development")
-	credential.SetDefault("APP_PORT", "8080")
-
-	credential.SetDefault("DB_HOST", "localhost")
-	credential.SetDefault("DB_PORT", "5432")
-	credential.SetDefault("DB_SSLMODE", "disable")
-
-	credential.SetDefault("JWT_ACCESS_TOKEN_EXPIRE", "15m")
-	credential.SetDefault("JWT_REFRESH_TOKEN_EXPIRE", "7d")
-
-	credential.SetDefault("OTP_EXPIRE", "5m")
-	credential.SetDefault("OTP_LENGTH", 5)
 }

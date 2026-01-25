@@ -15,12 +15,11 @@ import (
 	_ "github.com/ziutek/mymysql/godrv"
 
 	"github.com/letenk/golang-authentication/configs/credential"
-	"github.com/letenk/golang-authentication/configs/migrations"
 )
 
 var (
 	flags = flag.NewFlagSet("goose", flag.ExitOnError)
-	dir   = flags.String("dir", migrations.MigrationPath(), "directory with migration files")
+	dir   = flags.String("dir", "./migrations", "directory with migration files")
 
 	usagePrefix = `Usage: goose [OPTIONS] DRIVER DBSTRING COMMAND
 Drivers:
@@ -67,11 +66,6 @@ func main() {
 		log.Fatal(err)
 	}
 
-	if err := migrations.ValidateConnection(); err != nil {
-		log.Fatalf("Invalid database config: %v", err)
-		return
-	}
-
 	// Run migration
 	if len(args) > 1 && args[0] == "run" {
 		log.Printf("PROGRAM RUN\n")
@@ -102,10 +96,11 @@ func main() {
 		log.Fatalf("%q driver not supported\n", driver)
 	}
 
-	dbSource := migrations.MigrationConnection()
-	db, err := sql.Open(driver, dbSource)
+	cfg := credential.Config
+	dsn := cfg.Database.Configs.GetDSNPostgreSQL()
+	db, err := sql.Open(driver, dsn)
 	if err != nil {
-		log.Fatalf("-dbstring=%q: %v\n", dbSource, err)
+		log.Fatalf("-dbstring=%q: %v\n", dsn, err)
 	}
 
 	executeCommand(args, command, db)
