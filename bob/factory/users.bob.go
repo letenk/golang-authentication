@@ -46,7 +46,7 @@ type UserTemplate struct {
 	DeletedAt  func() null.Val[time.Time]
 	DeletedBy  func() null.Val[int64]
 	Name       func() null.Val[string]
-	Email      func() string
+	Email      func() null.Val[string]
 	Phone      func() null.Val[string]
 	Password   func() string
 	LoginType  func() string
@@ -204,7 +204,7 @@ func (o UserTemplate) BuildSetter() *models.UserSetter {
 	}
 	if o.Email != nil {
 		val := o.Email()
-		m.Email = omit.From(val)
+		m.Email = omitnull.FromNull(val)
 	}
 	if o.Phone != nil {
 		val := o.Phone()
@@ -313,10 +313,6 @@ func (o UserTemplate) BuildMany(number int) models.UserSlice {
 }
 
 func ensureCreatableUser(m *models.UserSetter) {
-	if !(m.Email.IsValue()) {
-		val := random_string(nil, "255")
-		m.Email = omit.From(val)
-	}
 	if !(m.Password.IsValue()) {
 		val := random_string(nil, "255")
 		m.Password = omit.From(val)
@@ -949,14 +945,14 @@ func (m userMods) RandomNameNotNull(f *faker.Faker) UserMod {
 }
 
 // Set the model columns to this value
-func (m userMods) Email(val string) UserMod {
+func (m userMods) Email(val null.Val[string]) UserMod {
 	return UserModFunc(func(_ context.Context, o *UserTemplate) {
-		o.Email = func() string { return val }
+		o.Email = func() null.Val[string] { return val }
 	})
 }
 
 // Set the Column from the function
-func (m userMods) EmailFunc(f func() string) UserMod {
+func (m userMods) EmailFunc(f func() null.Val[string]) UserMod {
 	return UserModFunc(func(_ context.Context, o *UserTemplate) {
 		o.Email = f
 	})
@@ -971,10 +967,32 @@ func (m userMods) UnsetEmail() UserMod {
 
 // Generates a random value for the column using the given faker
 // if faker is nil, a default faker is used
+// The generated value is sometimes null
 func (m userMods) RandomEmail(f *faker.Faker) UserMod {
 	return UserModFunc(func(_ context.Context, o *UserTemplate) {
-		o.Email = func() string {
-			return random_string(f, "255")
+		o.Email = func() null.Val[string] {
+			if f == nil {
+				f = &defaultFaker
+			}
+
+			val := random_string(f, "255")
+			return null.From(val)
+		}
+	})
+}
+
+// Generates a random value for the column using the given faker
+// if faker is nil, a default faker is used
+// The generated value is never null
+func (m userMods) RandomEmailNotNull(f *faker.Faker) UserMod {
+	return UserModFunc(func(_ context.Context, o *UserTemplate) {
+		o.Email = func() null.Val[string] {
+			if f == nil {
+				f = &defaultFaker
+			}
+
+			val := random_string(f, "255")
+			return null.From(val)
 		}
 	})
 }
