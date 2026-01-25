@@ -36,6 +36,7 @@ type AuthConfig struct {
 }
 
 type JWTConfig struct {
+	Secret             string `mapstructure:"secret"`
 	AccessTokenExpire  string `mapstructure:"access_token_expire"`
 	RefreshTokenExpire string `mapstructure:"refresh_token_expire"`
 }
