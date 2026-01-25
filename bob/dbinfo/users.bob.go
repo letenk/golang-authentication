@@ -99,9 +99,9 @@ var Users = Table[
 		Email: column{
 			Name:      "email",
 			DBType:    "character varying",
-			Default:   "",
+			Default:   "NULL",
 			Comment:   "",
-			Nullable:  false,
+			Nullable:  true,
 			Generated: false,
 			AutoIncr:  false,
 		},
@@ -186,9 +186,9 @@ var Users = Table[
 			Where:         "",
 			Include:       []string{},
 		},
-		UsersEmailKey: index{
+		UsersEmailUniqueIdx: index{
 			Type: "btree",
-			Name: "users_email_key",
+			Name: "users_email_unique_idx",
 			Columns: []indexColumn{
 				{
 					Name:         "email",
@@ -200,7 +200,7 @@ var Users = Table[
 			Comment:       "",
 			NullsFirst:    []bool{false},
 			NullsDistinct: false,
-			Where:         "",
+			Where:         "(email IS NOT NULL)",
 			Include:       []string{},
 		},
 		UsersPhoneIndex: index{
@@ -220,9 +220,9 @@ var Users = Table[
 			Where:         "",
 			Include:       []string{},
 		},
-		UsersPhoneKey: index{
+		UsersPhoneUniqueIdx: index{
 			Type: "btree",
-			Name: "users_phone_key",
+			Name: "users_phone_unique_idx",
 			Columns: []indexColumn{
 				{
 					Name:         "phone",
@@ -234,7 +234,7 @@ var Users = Table[
 			Comment:       "",
 			NullsFirst:    []bool{false},
 			NullsDistinct: false,
-			Where:         "",
+			Where:         "(phone IS NOT NULL)",
 			Include:       []string{},
 		},
 	},
@@ -272,18 +272,6 @@ var Users = Table[
 			ForeignColumns: []string{"id"},
 		},
 	},
-	Uniques: userUniques{
-		UsersEmailKey: constraint{
-			Name:    "users_email_key",
-			Columns: []string{"email"},
-			Comment: "",
-		},
-		UsersPhoneKey: constraint{
-			Name:    "users_phone_key",
-			Columns: []string{"phone"},
-			Comment: "",
-		},
-	},
 
 	Comment: "",
 }
@@ -313,16 +301,16 @@ func (c userColumns) AsSlice() []column {
 }
 
 type userIndexes struct {
-	UsersPkey       index
-	UsersEmailIndex index
-	UsersEmailKey   index
-	UsersPhoneIndex index
-	UsersPhoneKey   index
+	UsersPkey           index
+	UsersEmailIndex     index
+	UsersEmailUniqueIdx index
+	UsersPhoneIndex     index
+	UsersPhoneUniqueIdx index
 }
 
 func (i userIndexes) AsSlice() []index {
 	return []index{
-		i.UsersPkey, i.UsersEmailIndex, i.UsersEmailKey, i.UsersPhoneIndex, i.UsersPhoneKey,
+		i.UsersPkey, i.UsersEmailIndex, i.UsersEmailUniqueIdx, i.UsersPhoneIndex, i.UsersPhoneUniqueIdx,
 	}
 }
 
@@ -338,15 +326,10 @@ func (f userForeignKeys) AsSlice() []foreignKey {
 	}
 }
 
-type userUniques struct {
-	UsersEmailKey constraint
-	UsersPhoneKey constraint
-}
+type userUniques struct{}
 
 func (u userUniques) AsSlice() []constraint {
-	return []constraint{
-		u.UsersEmailKey, u.UsersPhoneKey,
-	}
+	return []constraint{}
 }
 
 type userChecks struct{}

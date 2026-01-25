@@ -75,7 +75,7 @@ func (f *Factory) FromExistingUser(m *models.User) *UserTemplate {
 	o.DeletedAt = func() null.Val[time.Time] { return m.DeletedAt }
 	o.DeletedBy = func() null.Val[int64] { return m.DeletedBy }
 	o.Name = func() null.Val[string] { return m.Name }
-	o.Email = func() string { return m.Email }
+	o.Email = func() null.Val[string] { return m.Email }
 	o.Phone = func() null.Val[string] { return m.Phone }
 	o.Password = func() string { return m.Password }
 	o.LoginType = func() string { return m.LoginType }

@@ -35,7 +35,7 @@ type User struct {
 	DeletedAt  null.Val[time.Time] `db:"deleted_at" `
 	DeletedBy  null.Val[int64]     `db:"deleted_by" `
 	Name       null.Val[string]    `db:"name" `
-	Email      string              `db:"email" `
+	Email      null.Val[string]    `db:"email" `
 	Phone      null.Val[string]    `db:"phone" `
 	Password   string              `db:"password" `
 	LoginType  string              `db:"login_type" `
@@ -130,7 +130,7 @@ type UserSetter struct {
 	DeletedAt  omitnull.Val[time.Time] `db:"deleted_at" `
 	DeletedBy  omitnull.Val[int64]     `db:"deleted_by" `
 	Name       omitnull.Val[string]    `db:"name" `
-	Email      omit.Val[string]        `db:"email" `
+	Email      omitnull.Val[string]    `db:"email" `
 	Phone      omitnull.Val[string]    `db:"phone" `
 	Password   omit.Val[string]        `db:"password" `
 	LoginType  omit.Val[string]        `db:"login_type" `
@@ -167,7 +167,7 @@ func (s UserSetter) SetColumns() []string {
 	if !s.Name.IsUnset() {
 		vals = append(vals, "name")
 	}
-	if s.Email.IsValue() {
+	if !s.Email.IsUnset() {
 		vals = append(vals, "email")
 	}
 	if !s.Phone.IsUnset() {
@@ -216,8 +216,8 @@ func (s UserSetter) Overwrite(t *User) {
 	if !s.Name.IsUnset() {
 		t.Name = s.Name.MustGetNull()
 	}
-	if s.Email.IsValue() {
-		t.Email = s.Email.MustGet()
+	if !s.Email.IsUnset() {
+		t.Email = s.Email.MustGetNull()
 	}
 	if !s.Phone.IsUnset() {
 		t.Phone = s.Phone.MustGetNull()
@@ -297,8 +297,8 @@ func (s *UserSetter) Apply(q *dialect.InsertQuery) {
 			vals[8] = psql.Raw("DEFAULT")
 		}
 
-		if s.Email.IsValue() {
-			vals[9] = psql.Arg(s.Email.MustGet())
+		if !s.Email.IsUnset() {
+			vals[9] = psql.Arg(s.Email.MustGetNull())
 		} else {
 			vals[9] = psql.Raw("DEFAULT")
 		}
@@ -407,7 +407,7 @@ func (s UserSetter) Expressions(prefix ...string) []bob.Expression {
 		}})
 	}
 
-	if s.Email.IsValue() {
+	if !s.Email.IsUnset() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
 			psql.Quote(append(prefix, "email")...),
 			psql.Arg(s.Email),
@@ -1177,7 +1177,7 @@ type userWhere[Q psql.Filterable] struct {
 	DeletedAt  psql.WhereNullMod[Q, time.Time]
 	DeletedBy  psql.WhereNullMod[Q, int64]
 	Name       psql.WhereNullMod[Q, string]
-	Email      psql.WhereMod[Q, string]
+	Email      psql.WhereNullMod[Q, string]
 	Phone      psql.WhereNullMod[Q, string]
 	Password   psql.WhereMod[Q, string]
 	LoginType  psql.WhereMod[Q, string]
@@ -1200,7 +1200,7 @@ func buildUserWhere[Q psql.Filterable](cols userColumns) userWhere[Q] {
 		DeletedAt:  psql.WhereNull[Q, time.Time](cols.DeletedAt),
 		DeletedBy:  psql.WhereNull[Q, int64](cols.DeletedBy),
 		Name:       psql.WhereNull[Q, string](cols.Name),
-		Email:      psql.Where[Q, string](cols.Email),
+		Email:      psql.WhereNull[Q, string](cols.Email),
 		Phone:      psql.WhereNull[Q, string](cols.Phone),
 		Password:   psql.Where[Q, string](cols.Password),
 		LoginType:  psql.Where[Q, string](cols.LoginType),

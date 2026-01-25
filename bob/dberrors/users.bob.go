@@ -10,26 +10,8 @@ var UserErrors = &userErrors{
 		columns: []string{"id"},
 		s:       "users_pkey",
 	},
-
-	ErrUniqueUsersEmailKey: &UniqueConstraintError{
-		schema:  "",
-		table:   "users",
-		columns: []string{"email"},
-		s:       "users_email_key",
-	},
-
-	ErrUniqueUsersPhoneKey: &UniqueConstraintError{
-		schema:  "",
-		table:   "users",
-		columns: []string{"phone"},
-		s:       "users_phone_key",
-	},
 }
 
 type userErrors struct {
 	ErrUniqueUsersPkey *UniqueConstraintError
-
-	ErrUniqueUsersEmailKey *UniqueConstraintError
-
-	ErrUniqueUsersPhoneKey *UniqueConstraintError
 }

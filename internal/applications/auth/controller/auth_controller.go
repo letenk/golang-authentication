@@ -1,8 +1,6 @@
 package controller
 
 import (
-	"net/http"
-
 	"github.com/labstack/echo/v4"
 	"github.com/letenk/golang-authentication/internal/applications/auth/dto"
 	"github.com/letenk/golang-authentication/internal/applications/auth/service"
@@ -28,7 +26,12 @@ func (controller *AuthController) Register(ctx echo.Context) error {
 
 	err := helper.BindAndValidate(ctx, request)
 	if err != nil {
-		return response.Error(ctx, http.StatusBadRequest, err)
+		return err
+	}
+
+	// Custom validation: at least email or phone
+	if validationErr := request.Validate(); validationErr != nil {
+		return validationErr
 	}
 
 	param := &dto.ParameterRegister{
@@ -40,8 +43,18 @@ func (controller *AuthController) Register(ctx echo.Context) error {
 
 	result, err := controller.authService.Register(ctx.Request().Context(), param)
 	if err != nil {
-		return response.Error(ctx, http.StatusInternalServerError, err)
+		return err
 	}
 
-	return response.SuccessWithMessage(ctx, "User registered successfully", result)
+	successResponse := &dto.RegisterResponse{
+		User: &dto.UserResponse{
+			ID:         result.ID,
+			FullName:   result.Name.GetOr(""),
+			Email:      result.Email.GetOr(""),
+			Phone:      result.Phone.GetOr(""),
+			IsVerified: result.IsVerified.GetOr(false),
+		},
+	}
+
+	return response.SuccessWithMessage(ctx, "User registered successfully", successResponse)
 }
