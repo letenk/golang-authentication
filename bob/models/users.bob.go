@@ -57,12 +57,13 @@ type UsersQuery = *psql.ViewQuery[*User, UserSlice]
 
 // userR is where relationships are stored.
 type userR struct {
-	CreatedBy          *User     // users.fk_users_created_by
-	ReverseCreatedBies UserSlice // users.fk_users_created_by__self_join_reverse
-	DeletedBy          *User     // users.fk_users_deleted_by
-	ReverseDeletedBies UserSlice // users.fk_users_deleted_by__self_join_reverse
-	UpdatedBy          *User     // users.fk_users_updated_by
-	ReverseUpdatedBies UserSlice // users.fk_users_updated_by__self_join_reverse
+	RefreshTokens      RefreshTokenSlice // refresh_tokens.refresh_tokens_user_id_fkey
+	CreatedBy          *User             // users.fk_users_created_by
+	ReverseCreatedBies UserSlice         // users.fk_users_created_by__self_join_reverse
+	DeletedBy          *User             // users.fk_users_deleted_by
+	ReverseDeletedBies UserSlice         // users.fk_users_deleted_by__self_join_reverse
+	UpdatedBy          *User             // users.fk_users_updated_by
+	ReverseUpdatedBies UserSlice         // users.fk_users_updated_by__self_join_reverse
 }
 
 func buildUserColumns(alias string) userColumns {
@@ -675,6 +676,30 @@ func (o UserSlice) ReloadAll(ctx context.Context, exec bob.Executor) error {
 	return nil
 }
 
+// RefreshTokens starts a query for related objects on refresh_tokens
+func (o *User) RefreshTokens(mods ...bob.Mod[*dialect.SelectQuery]) RefreshTokensQuery {
+	return RefreshTokens.Query(append(mods,
+		sm.Where(RefreshTokens.Columns.UserID.EQ(psql.Arg(o.ID))),
+	)...)
+}
+
+func (os UserSlice) RefreshTokens(mods ...bob.Mod[*dialect.SelectQuery]) RefreshTokensQuery {
+	pkID := make(pgtypes.Array[int64], 0, len(os))
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		pkID = append(pkID, o.ID)
+	}
+	PKArgExpr := psql.Select(sm.Columns(
+		psql.F("unnest", psql.Cast(psql.Arg(pkID), "bigint[]")),
+	))
+
+	return RefreshTokens.Query(append(mods,
+		sm.Where(psql.Group(RefreshTokens.Columns.UserID).OP("IN", PKArgExpr)),
+	)...)
+}
+
 // CreatedBy starts a query for related objects on users
 func (o *User) RelatedCreatedBy(mods ...bob.Mod[*dialect.SelectQuery]) UsersQuery {
 	return Users.Query(append(mods,
@@ -817,6 +842,74 @@ func (os UserSlice) ReverseUpdatedBies(mods ...bob.Mod[*dialect.SelectQuery]) Us
 	return Users.Query(append(mods,
 		sm.Where(psql.Group(Users.Columns.UpdatedBy).OP("IN", PKArgExpr)),
 	)...)
+}
+
+func insertUserRefreshTokens0(ctx context.Context, exec bob.Executor, refreshTokens1 []*RefreshTokenSetter, user0 *User) (RefreshTokenSlice, error) {
+	for i := range refreshTokens1 {
+		refreshTokens1[i].UserID = omit.From(user0.ID)
+	}
+
+	ret, err := RefreshTokens.Insert(bob.ToMods(refreshTokens1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertUserRefreshTokens0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachUserRefreshTokens0(ctx context.Context, exec bob.Executor, count int, refreshTokens1 RefreshTokenSlice, user0 *User) (RefreshTokenSlice, error) {
+	setter := &RefreshTokenSetter{
+		UserID: omit.From(user0.ID),
+	}
+
+	err := refreshTokens1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachUserRefreshTokens0: %w", err)
+	}
+
+	return refreshTokens1, nil
+}
+
+func (user0 *User) InsertRefreshTokens(ctx context.Context, exec bob.Executor, related ...*RefreshTokenSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	refreshTokens1, err := insertUserRefreshTokens0(ctx, exec, related, user0)
+	if err != nil {
+		return err
+	}
+
+	user0.R.RefreshTokens = append(user0.R.RefreshTokens, refreshTokens1...)
+
+	for _, rel := range refreshTokens1 {
+		rel.R.User = user0
+	}
+	return nil
+}
+
+func (user0 *User) AttachRefreshTokens(ctx context.Context, exec bob.Executor, related ...*RefreshToken) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	refreshTokens1 := RefreshTokenSlice(related)
+
+	_, err = attachUserRefreshTokens0(ctx, exec, len(related), refreshTokens1, user0)
+	if err != nil {
+		return err
+	}
+
+	user0.R.RefreshTokens = append(user0.R.RefreshTokens, refreshTokens1...)
+
+	for _, rel := range related {
+		rel.R.User = user0
+	}
+
+	return nil
 }
 
 func attachUserCreatedBy0(ctx context.Context, exec bob.Executor, count int, user0 *User, user1 *User) (*User, error) {
@@ -1215,6 +1308,20 @@ func (o *User) Preload(name string, retrieved any) error {
 	}
 
 	switch name {
+	case "RefreshTokens":
+		rels, ok := retrieved.(RefreshTokenSlice)
+		if !ok {
+			return fmt.Errorf("user cannot load %T as %q", retrieved, name)
+		}
+
+		o.R.RefreshTokens = rels
+
+		for _, rel := range rels {
+			if rel != nil {
+				rel.R.User = o
+			}
+		}
+		return nil
 	case "CreatedBy":
 		rel, ok := retrieved.(*User)
 		if !ok {
@@ -1349,6 +1456,7 @@ func buildUserPreloader() userPreloader {
 }
 
 type userThenLoader[Q orm.Loadable] struct {
+	RefreshTokens      func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
 	CreatedBy          func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
 	ReverseCreatedBies func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
 	DeletedBy          func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
@@ -1358,6 +1466,9 @@ type userThenLoader[Q orm.Loadable] struct {
 }
 
 func buildUserThenLoader[Q orm.Loadable]() userThenLoader[Q] {
+	type RefreshTokensLoadInterface interface {
+		LoadRefreshTokens(context.Context, bob.Executor, ...bob.Mod[*dialect.SelectQuery]) error
+	}
 	type CreatedByLoadInterface interface {
 		LoadCreatedBy(context.Context, bob.Executor, ...bob.Mod[*dialect.SelectQuery]) error
 	}
@@ -1378,6 +1489,12 @@ func buildUserThenLoader[Q orm.Loadable]() userThenLoader[Q] {
 	}
 
 	return userThenLoader[Q]{
+		RefreshTokens: thenLoadBuilder[Q](
+			"RefreshTokens",
+			func(ctx context.Context, exec bob.Executor, retrieved RefreshTokensLoadInterface, mods ...bob.Mod[*dialect.SelectQuery]) error {
+				return retrieved.LoadRefreshTokens(ctx, exec, mods...)
+			},
+		),
 		CreatedBy: thenLoadBuilder[Q](
 			"CreatedBy",
 			func(ctx context.Context, exec bob.Executor, retrieved CreatedByLoadInterface, mods ...bob.Mod[*dialect.SelectQuery]) error {
@@ -1415,6 +1532,67 @@ func buildUserThenLoader[Q orm.Loadable]() userThenLoader[Q] {
 			},
 		),
 	}
+}
+
+// LoadRefreshTokens loads the user's RefreshTokens into the .R struct
+func (o *User) LoadRefreshTokens(ctx context.Context, exec bob.Executor, mods ...bob.Mod[*dialect.SelectQuery]) error {
+	if o == nil {
+		return nil
+	}
+
+	// Reset the relationship
+	o.R.RefreshTokens = nil
+
+	related, err := o.RefreshTokens(mods...).All(ctx, exec)
+	if err != nil {
+		return err
+	}
+
+	for _, rel := range related {
+		rel.R.User = o
+	}
+
+	o.R.RefreshTokens = related
+	return nil
+}
+
+// LoadRefreshTokens loads the user's RefreshTokens into the .R struct
+func (os UserSlice) LoadRefreshTokens(ctx context.Context, exec bob.Executor, mods ...bob.Mod[*dialect.SelectQuery]) error {
+	if len(os) == 0 {
+		return nil
+	}
+
+	refreshTokens, err := os.RefreshTokens(mods...).All(ctx, exec)
+	if err != nil {
+		return err
+	}
+
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+
+		o.R.RefreshTokens = nil
+	}
+
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+
+		for _, rel := range refreshTokens {
+
+			if !(o.ID == rel.UserID) {
+				continue
+			}
+
+			rel.R.User = o
+
+			o.R.RefreshTokens = append(o.R.RefreshTokens, rel)
+		}
+	}
+
+	return nil
 }
 
 // LoadCreatedBy loads the user's CreatedBy into the .R struct
@@ -1764,6 +1942,7 @@ func (os UserSlice) LoadReverseUpdatedBies(ctx context.Context, exec bob.Executo
 
 type userJoins[Q dialect.Joinable] struct {
 	typ                string
+	RefreshTokens      modAs[Q, refreshTokenColumns]
 	CreatedBy          modAs[Q, userColumns]
 	ReverseCreatedBies modAs[Q, userColumns]
 	DeletedBy          modAs[Q, userColumns]
@@ -1779,6 +1958,20 @@ func (j userJoins[Q]) aliasedAs(alias string) userJoins[Q] {
 func buildUserJoins[Q dialect.Joinable](cols userColumns, typ string) userJoins[Q] {
 	return userJoins[Q]{
 		typ: typ,
+		RefreshTokens: modAs[Q, refreshTokenColumns]{
+			c: RefreshTokens.Columns,
+			f: func(to refreshTokenColumns) bob.Mod[Q] {
+				mods := make(mods.QueryMods[Q], 0, 1)
+
+				{
+					mods = append(mods, dialect.Join[Q](typ, RefreshTokens.Name().As(to.Alias())).On(
+						to.UserID.EQ(cols.ID),
+					))
+				}
+
+				return mods
+			},
+		},
 		CreatedBy: modAs[Q, userColumns]{
 			c: Users.Columns,
 			f: func(to userColumns) bob.Mod[Q] {

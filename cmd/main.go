@@ -12,6 +12,7 @@ import (
 	"github.com/labstack/gommon/log"
 	"github.com/letenk/golang-authentication/configs/credential"
 	"github.com/letenk/golang-authentication/configs/database"
+	"github.com/letenk/golang-authentication/configs/jwt_config"
 	customValidator "github.com/letenk/golang-authentication/configs/validator"
 	rest "github.com/letenk/golang-authentication/internal/adapter/rest"
 )
@@ -39,6 +40,13 @@ func main() {
 
 	log.Info("initialized database configuration=", dbConnection)
 
+	jwtConfig, err := jwt_config.NewJWTConfig(&cfg.Auth.JWT)
+	if err != nil {
+		log.Fatal("Failed to setup JWT config:", err)
+	}
+
+	log.Info("Initialized JWT configuration", jwtConfig)
+
 	defer func(dbConnection *database.BobDB) {
 		err := dbConnection.DB.Close()
 		if err != nil {
@@ -55,7 +63,7 @@ func main() {
 	e.Use(middleware.CORS())
 	e.Use(middleware.Secure())
 
-	rest.SetupRouteHandler(e, dbConnection)
+	rest.SetupRouteHandler(e, dbConnection, jwtConfig)
 
 	// Graceful shutdown
 	go func() {

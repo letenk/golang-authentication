@@ -9,19 +9,22 @@ package auth
 import (
 	"github.com/google/wire"
 	"github.com/letenk/golang-authentication/configs/database"
+	"github.com/letenk/golang-authentication/configs/jwt_config"
 	"github.com/letenk/golang-authentication/internal/applications/auth/service"
+	"github.com/letenk/golang-authentication/internal/applications/refresh_token/repository/db"
 	"github.com/letenk/golang-authentication/internal/applications/user/repository/db"
 )
 
 // Injectors from auth_injector.go:
 
 // InitializeAuthService initializes all dependencies for AuthController
-func InitializeAuthService(db2 *database.BobDB) *service.AuthServiceImpl {
+func InitializeAuthService(db2 *database.BobDB, jwtConfig *jwt_config.JWTConfig) *service.AuthServiceImpl {
 	userRepositoryImpl := db.NewUserRepository(db2)
-	authServiceImpl := service.NewAuthService(userRepositoryImpl)
+	refreshTokenRepositoryImpl := repository.NewRefreshTokenRepository(db2)
+	authServiceImpl := service.NewAuthService(userRepositoryImpl, refreshTokenRepositoryImpl, jwtConfig)
 	return authServiceImpl
 }
 
 // auth_injector.go:
 
-var providerSetAuth = wire.NewSet(db.NewUserRepository, wire.Bind(new(db.UserRepository), new(*db.UserRepositoryImpl)), service.NewAuthService, wire.Bind(new(service.AuthService), new(*service.AuthServiceImpl)))
+var providerSetAuth = wire.NewSet(db.NewUserRepository, wire.Bind(new(db.UserRepository), new(*db.UserRepositoryImpl)), repository.NewRefreshTokenRepository, wire.Bind(new(repository.RefreshTokenRepository), new(*repository.RefreshTokenRepositoryImpl)), service.NewAuthService, wire.Bind(new(service.AuthService), new(*service.AuthServiceImpl)))

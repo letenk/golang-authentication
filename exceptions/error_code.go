@@ -3,10 +3,14 @@ package exceptions
 type AuthenticationCode int
 
 const (
-	AuthenticationBadFormat       AuthenticationCode = 20001
-	AuthenticationUnauthenticated AuthenticationCode = 20002
-	AuthenticationInvalidRealm    AuthenticationCode = 20003
-	AuthenticationInvalidIdentity AuthenticationCode = 20004
+	AuthenticationBadFormat          AuthenticationCode = 20001
+	AuthenticationUnauthenticated    AuthenticationCode = 20002
+	AuthenticationInvalidRealm       AuthenticationCode = 20003
+	AuthenticationInvalidIdentity    AuthenticationCode = 20004
+	AuthenticationInvalidCredentials AuthenticationCode = 20005
+	AuthenticationInvalidToken       AuthenticationCode = 20006
+	AuthenticationTokenRevoked       AuthenticationCode = 20007
+	AuthenticationTokenExpired       AuthenticationCode = 20008
 )
 
 // refer to for best practice: https://learn.microsoft.com/en-us/azure/architecture/best-practices/api-design
