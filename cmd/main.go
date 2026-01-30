@@ -45,7 +45,7 @@ func main() {
 		log.Fatal("Failed to setup JWT config:", err)
 	}
 
-	log.Info("Initialized JWT configuration", jwtConfig)
+	log.Info("Initialized JWT configuration")
 
 	defer func(dbConnection *database.BobDB) {
 		err := dbConnection.DB.Close()
