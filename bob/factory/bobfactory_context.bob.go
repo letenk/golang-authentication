@@ -11,8 +11,13 @@ var (
 	// Relationship Contexts for goose_db_version
 	gooseDBVersionWithParentsCascadingCtx = newContextual[bool]("gooseDBVersionWithParentsCascading")
 
+	// Relationship Contexts for refresh_tokens
+	refreshTokenWithParentsCascadingCtx = newContextual[bool]("refreshTokenWithParentsCascading")
+	refreshTokenRelUserCtx              = newContextual[bool]("refresh_tokens.users.refresh_tokens.refresh_tokens_user_id_fkey")
+
 	// Relationship Contexts for users
 	userWithParentsCascadingCtx  = newContextual[bool]("userWithParentsCascading")
+	userRelRefreshTokensCtx      = newContextual[bool]("refresh_tokens.users.refresh_tokens.refresh_tokens_user_id_fkey")
 	userRelCreatedByCtx          = newContextual[bool]("users.users.users.fk_users_created_by")
 	userRelReverseCreatedBiesCtx = newContextual[bool]("users.users.users.fk_users_created_by")
 	userRelDeletedByCtx          = newContextual[bool]("users.users.users.fk_users_deleted_by")

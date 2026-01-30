@@ -6,22 +6,28 @@ import (
 
 	"github.com/aarondl/opt/omitnull"
 	"github.com/labstack/echo/v4"
+
 	"github.com/letenk/golang-authentication/bob/models"
 	"github.com/letenk/golang-authentication/configs/credential"
 	"github.com/letenk/golang-authentication/configs/database"
+	jwt_config "github.com/letenk/golang-authentication/configs/jwt_config"
 	"github.com/letenk/golang-authentication/internal/applications/auth"
 	authController "github.com/letenk/golang-authentication/internal/applications/auth/controller"
+	authentication "github.com/letenk/golang-authentication/middleware/authentication"
 )
 
-func SetupRouteHandler(e *echo.Echo, db *database.BobDB) {
+func SetupRouteHandler(e *echo.Echo, db *database.BobDB, jwtConfig *jwt_config.JWTConfig) {
 
 	// TODO: Implement Swagger
 
+	authMiddleware := authentication.NewAuthenticationMiddleware(jwtConfig)
+
 	// Initialize controllers using Wire DI
-	authService := auth.InitializeAuthService(db)
+	authService := auth.InitializeAuthService(db, jwtConfig)
 	authCtrl := authController.NewAuthController(authService)
-	// Setup routes
-	authCtrl.AddRoutes(e)
+
+	// Setup routes with middleware
+	authCtrl.AddRoutes(e, authMiddleware)
 
 	// API v1 group
 	v1 := e.Group("/api/v1")

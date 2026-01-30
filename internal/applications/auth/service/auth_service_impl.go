@@ -4,26 +4,36 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"time"
 
 	"github.com/aarondl/opt/omit"
 	"github.com/aarondl/opt/omitnull"
 	"github.com/labstack/gommon/log"
 	"github.com/letenk/golang-authentication/bob/models"
+	"github.com/letenk/golang-authentication/configs/jwt_config"
 	"github.com/letenk/golang-authentication/exceptions"
 	"github.com/letenk/golang-authentication/internal/applications/auth/dto"
-	"github.com/letenk/golang-authentication/internal/applications/user/repository/db"
+	refreshTokenRepo "github.com/letenk/golang-authentication/internal/applications/refresh_token/repository/db"
+	userRepo "github.com/letenk/golang-authentication/internal/applications/user/repository/db"
 	"github.com/letenk/golang-authentication/internal/utils"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type AuthServiceImpl struct {
-	userRepository db.UserRepository
+	userRepository  userRepo.UserRepository
+	tokenRepository refreshTokenRepo.RefreshTokenRepository
+	jwtConfig       *jwt_config.JWTConfig
 }
 
 func NewAuthService(
-	userRepository db.UserRepository,
+	userRepository userRepo.UserRepository,
+	tokenRepository refreshTokenRepo.RefreshTokenRepository,
+	jwtConfig *jwt_config.JWTConfig,
 ) *AuthServiceImpl {
 	return &AuthServiceImpl{
-		userRepository: userRepository,
+		userRepository:  userRepository,
+		tokenRepository: tokenRepository,
+		jwtConfig:       jwtConfig,
 	}
 }
 
@@ -100,4 +110,78 @@ func (service *AuthServiceImpl) Register(ctx context.Context, param *dto.Paramet
 	}
 
 	return result, nil
+}
+
+// Login authenticates user and returns access token with refresh token
+func (service *AuthServiceImpl) Login(ctx context.Context, req *dto.LoginRequest, ipAddress, userAgent string) (*dto.LoginResponse, error) {
+	// Find user by email
+	user, err := service.userRepository.FindByEmail(ctx, req.Email)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, exceptions.NewAuthenticationError("Invalid email or password", exceptions.AuthenticationInvalidCredentials)
+		}
+		log.Errorf("failed to find user by email: %s", err)
+		return nil, exceptions.NewBusinessLogicError(exceptions.DataGetFailed, errors.New("failed to find user"), nil)
+	}
+
+	// Compare password
+	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password))
+	if err != nil {
+		return nil, exceptions.NewAuthenticationError("Invalid email or password", exceptions.AuthenticationInvalidCredentials)
+	}
+
+	// Generate access token
+	email := ""
+	if user.Email.IsValue() {
+		email = user.Email.GetOrZero()
+	}
+
+	accessToken, accessExpiresAt, err := service.jwtConfig.GenerateAccessToken(user.ID, email)
+	if err != nil {
+		log.Errorf("failed to generate access token: %s", err)
+		return nil, exceptions.NewBusinessLogicError(exceptions.DataCreateFailed, errors.New("failed to generate access token"), nil)
+	}
+
+	// Generate refresh token
+	refreshToken, refreshExpiresAt := service.jwtConfig.GenerateRefreshToken()
+
+	// Set device info
+	deviceName := req.DeviceName
+	if deviceName == "" {
+		deviceName = "Unknown Device"
+	}
+
+	// Create refresh token record using Setter
+	tokenSetter := &models.RefreshTokenSetter{
+		UserID:     omit.From(user.ID),
+		Token:      omit.From(refreshToken),
+		DeviceName: omitnull.From(deviceName),
+		DeviceID:   omitnull.From(req.DeviceID),
+		IPAddress:  omitnull.From(ipAddress),
+		UserAgent:  omitnull.From(userAgent),
+		ExpiresAt:  omit.From(refreshExpiresAt),
+	}
+
+	_, err = service.tokenRepository.Create(ctx, tokenSetter)
+	if err != nil {
+		log.Errorf("failed to create refresh token: %s", err)
+		return nil, exceptions.NewBusinessLogicError(exceptions.DataCreateFailed, errors.New("failed to create refresh token"), nil)
+	}
+
+	// Build user response
+	userResp := &dto.UserResponse{
+		ID:         user.ID,
+		Email:      email,
+		FullName:   user.Name.GetOrZero(),
+		Phone:      user.Phone.GetOrZero(),
+		IsVerified: user.IsVerified.GetOrZero(),
+	}
+
+	return &dto.LoginResponse{
+		User:                  userResp,
+		AccessToken:           accessToken,
+		RefreshToken:          refreshToken,
+		AccessTokenExpiresAt:  accessExpiresAt.Format(time.RFC3339),
+		RefreshTokenExpiresAt: refreshExpiresAt.Format(time.RFC3339),
+	}, nil
 }

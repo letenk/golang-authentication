@@ -13,6 +13,7 @@ import (
 
 type Factory struct {
 	baseGooseDBVersionMods GooseDBVersionModSlice
+	baseRefreshTokenMods   RefreshTokenModSlice
 	baseUserMods           UserModSlice
 }
 
@@ -43,6 +44,45 @@ func (f *Factory) FromExistingGooseDBVersion(m *models.GooseDBVersion) *GooseDBV
 	o.VersionID = func() int64 { return m.VersionID }
 	o.IsApplied = func() bool { return m.IsApplied }
 	o.Tstamp = func() time.Time { return m.Tstamp }
+
+	return o
+}
+
+func (f *Factory) NewRefreshToken(mods ...RefreshTokenMod) *RefreshTokenTemplate {
+	return f.NewRefreshTokenWithContext(context.Background(), mods...)
+}
+
+func (f *Factory) NewRefreshTokenWithContext(ctx context.Context, mods ...RefreshTokenMod) *RefreshTokenTemplate {
+	o := &RefreshTokenTemplate{f: f}
+
+	if f != nil {
+		f.baseRefreshTokenMods.Apply(ctx, o)
+	}
+
+	RefreshTokenModSlice(mods).Apply(ctx, o)
+
+	return o
+}
+
+func (f *Factory) FromExistingRefreshToken(m *models.RefreshToken) *RefreshTokenTemplate {
+	o := &RefreshTokenTemplate{f: f, alreadyPersisted: true}
+
+	o.ID = func() int64 { return m.ID }
+	o.UserID = func() int64 { return m.UserID }
+	o.Token = func() string { return m.Token }
+	o.DeviceName = func() null.Val[string] { return m.DeviceName }
+	o.DeviceID = func() null.Val[string] { return m.DeviceID }
+	o.IPAddress = func() null.Val[string] { return m.IPAddress }
+	o.UserAgent = func() null.Val[string] { return m.UserAgent }
+	o.ExpiresAt = func() time.Time { return m.ExpiresAt }
+	o.CreatedAt = func() null.Val[time.Time] { return m.CreatedAt }
+	o.RevokedAt = func() null.Val[time.Time] { return m.RevokedAt }
+	o.ReplacedByToken = func() null.Val[string] { return m.ReplacedByToken }
+
+	ctx := context.Background()
+	if m.R.User != nil {
+		RefreshTokenMods.WithExistingUser(m.R.User).Apply(ctx, o)
+	}
 
 	return o
 }
@@ -83,6 +123,9 @@ func (f *Factory) FromExistingUser(m *models.User) *UserTemplate {
 	o.VerifiedAt = func() null.Val[time.Time] { return m.VerifiedAt }
 
 	ctx := context.Background()
+	if len(m.R.RefreshTokens) > 0 {
+		UserMods.AddExistingRefreshTokens(m.R.RefreshTokens...).Apply(ctx, o)
+	}
 	if m.R.CreatedBy != nil {
 		UserMods.WithExistingCreatedBy(m.R.CreatedBy).Apply(ctx, o)
 	}
@@ -111,6 +154,14 @@ func (f *Factory) ClearBaseGooseDBVersionMods() {
 
 func (f *Factory) AddBaseGooseDBVersionMod(mods ...GooseDBVersionMod) {
 	f.baseGooseDBVersionMods = append(f.baseGooseDBVersionMods, mods...)
+}
+
+func (f *Factory) ClearBaseRefreshTokenMods() {
+	f.baseRefreshTokenMods = nil
+}
+
+func (f *Factory) AddBaseRefreshTokenMod(mods ...RefreshTokenMod) {
+	f.baseRefreshTokenMods = append(f.baseRefreshTokenMods, mods...)
 }
 
 func (f *Factory) ClearBaseUserMods() {

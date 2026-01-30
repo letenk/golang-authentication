@@ -58,3 +58,25 @@ func (controller *AuthController) Register(ctx echo.Context) error {
 
 	return response.SuccessWithMessage(ctx, "User registered successfully", successResponse)
 }
+
+func (controller *AuthController) Login(ctx echo.Context) error {
+	request := &dto.LoginRequest{}
+
+	err := helper.BindAndValidate(ctx, request)
+	if err != nil {
+		return err
+	}
+
+	// Get client IP address
+	ipAddress := ctx.RealIP()
+
+	// Get user agent
+	userAgent := ctx.Request().UserAgent()
+
+	result, err := controller.authService.Login(ctx.Request().Context(), request, ipAddress, userAgent)
+	if err != nil {
+		return err
+	}
+
+	return response.SuccessWithMessage(ctx, "Login successful", result)
+}

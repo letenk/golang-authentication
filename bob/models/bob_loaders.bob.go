@@ -17,12 +17,14 @@ import (
 var Preload = getPreloaders()
 
 type preloaders struct {
-	User userPreloader
+	RefreshToken refreshTokenPreloader
+	User         userPreloader
 }
 
 func getPreloaders() preloaders {
 	return preloaders{
-		User: buildUserPreloader(),
+		RefreshToken: buildRefreshTokenPreloader(),
+		User:         buildUserPreloader(),
 	}
 }
 
@@ -33,12 +35,14 @@ var (
 )
 
 type thenLoaders[Q orm.Loadable] struct {
-	User userThenLoader[Q]
+	RefreshToken refreshTokenThenLoader[Q]
+	User         userThenLoader[Q]
 }
 
 func getThenLoaders[Q orm.Loadable]() thenLoaders[Q] {
 	return thenLoaders[Q]{
-		User: buildUserThenLoader[Q](),
+		RefreshToken: buildRefreshTokenThenLoader[Q](),
+		User:         buildUserThenLoader[Q](),
 	}
 }
 
