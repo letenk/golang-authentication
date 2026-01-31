@@ -30,8 +30,14 @@ func InitCredentialEnv() error {
 
 	credential := GetCredential()
 
+	// Setup environment variable reading
 	credential.AutomaticEnv()
 	credential.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	credential.AllowEmptyEnv(true)
+
+	// Bind all environment variables explicitly
+	// This ensures Viper reads from environment even when .env file doesn't exist
+	bindEnvVariables(credential)
 
 	credential.SetConfigName(fileCredentialName)
 	credential.AddConfigPath(credentialConfigPath)
@@ -80,4 +86,32 @@ func InitCredentialEnv() error {
 	log.Infof("initialized configs viper: success : credential")
 
 	return nil
+}
+
+// bindEnvVariables explicitly binds all configuration keys to environment variables
+func bindEnvVariables(v *viper.Viper) {
+	// Application
+	v.BindEnv("application.name")
+	v.BindEnv("application.env")
+	v.BindEnv("application.port")
+	v.BindEnv("application.mode")
+
+	// Database
+	v.BindEnv("db.configs.host")
+	v.BindEnv("db.configs.port")
+	v.BindEnv("db.configs.user")
+	v.BindEnv("db.configs.password")
+	v.BindEnv("db.configs.name")
+	v.BindEnv("db.configs.sslmode")
+	v.BindEnv("db.configs.maxIdleConn")
+	v.BindEnv("db.configs.maxOpenConn")
+
+	// JWT
+	v.BindEnv("auth.jwt.secret")
+	v.BindEnv("auth.jwt.access_token_expire")
+	v.BindEnv("auth.jwt.refresh_token_expire")
+
+	// OTP
+	v.BindEnv("auth.otp.expire")
+	v.BindEnv("auth.otp.length")
 }
