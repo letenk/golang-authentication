@@ -1,0 +1,57 @@
+# Binaries
+main
+migration
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+
+# Environment files
+.env
+.env-example
+.env.docker
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+docs/
+README.md
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Test files
+*_test.go
+testdata/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Logs
+*.log
+logs/
+
+# Dependencies (will be downloaded during build)
+vendor/
