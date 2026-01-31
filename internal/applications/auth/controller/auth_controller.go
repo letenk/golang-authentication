@@ -6,6 +6,8 @@ import (
 	"github.com/letenk/golang-authentication/internal/applications/auth/service"
 	"github.com/letenk/golang-authentication/internal/helper"
 	"github.com/letenk/golang-authentication/internal/helper/response"
+	"github.com/letenk/golang-authentication/internal/utils"
+	"github.com/letenk/golang-authentication/internal/utils/headers"
 )
 
 type AuthController struct {
@@ -79,4 +81,19 @@ func (controller *AuthController) Login(ctx echo.Context) error {
 	}
 
 	return response.SuccessWithMessage(ctx, "Login successful", result)
+}
+
+func (controller *AuthController) GetMe(ctx echo.Context) error {
+	// Extract header from context using GetContextHeaders pattern
+	header, err := utils.GetContextHeaders(ctx, headers.ContextHeaders)
+	if err != nil {
+		return err
+	}
+
+	result, err := controller.authService.GetMe(ctx.Request().Context(), header.UserID)
+	if err != nil {
+		return err
+	}
+
+	return response.SuccessWithMessage(ctx, "User retrieved successfully", result)
 }

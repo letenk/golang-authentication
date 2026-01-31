@@ -64,13 +64,12 @@ func parseDuration(durationStr string) (time.Duration, error) {
 }
 
 // GenerateAccessToken generates a new JWT access token
-func (h *JWTConfig) GenerateAccessToken(userID int64, email string) (string, time.Time, error) {
+func (h *JWTConfig) GenerateAccessToken(userID int64) (string, time.Time, error) {
 	now := time.Now()
 	expiresAt := now.Add(h.accessTokenExpire)
 
 	claims := JWTClaims{
 		UserID: userID,
-		Email:  email,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 			IssuedAt:  jwt.NewNumericDate(now),

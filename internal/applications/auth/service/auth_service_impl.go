@@ -136,7 +136,7 @@ func (service *AuthServiceImpl) Login(ctx context.Context, req *dto.LoginRequest
 		email = user.Email.GetOrZero()
 	}
 
-	accessToken, accessExpiresAt, err := service.jwtConfig.GenerateAccessToken(user.ID, email)
+	accessToken, accessExpiresAt, err := service.jwtConfig.GenerateAccessToken(user.ID)
 	if err != nil {
 		log.Errorf("failed to generate access token: %s", err)
 		return nil, exceptions.NewBusinessLogicError(exceptions.DataCreateFailed, errors.New("failed to generate access token"), nil)
@@ -183,5 +183,36 @@ func (service *AuthServiceImpl) Login(ctx context.Context, req *dto.LoginRequest
 		RefreshToken:          refreshToken,
 		AccessTokenExpiresAt:  accessExpiresAt.Format(time.RFC3339),
 		RefreshTokenExpiresAt: refreshExpiresAt.Format(time.RFC3339),
+	}, nil
+}
+
+// GetMe retrieves current user information with active sessions
+func (service *AuthServiceImpl) GetMe(ctx context.Context, userID int64) (*dto.GetMeResponse, error) {
+	// Find user by ID
+	user, err := service.userRepository.FindByID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, exceptions.NewBusinessLogicError(exceptions.DataNotFound, errors.New("user not found"), nil)
+		}
+		log.Errorf("failed to find user by ID: %s", err)
+		return nil, exceptions.NewBusinessLogicError(exceptions.DataGetFailed, errors.New("failed to get user"), nil)
+	}
+
+	// Build user response
+	email := ""
+	if user.Email.IsValue() {
+		email = user.Email.GetOrZero()
+	}
+
+	userResp := &dto.UserResponse{
+		ID:         user.ID,
+		Email:      email,
+		FullName:   user.Name.GetOrZero(),
+		Phone:      user.Phone.GetOrZero(),
+		IsVerified: user.IsVerified.GetOrZero(),
+	}
+
+	return &dto.GetMeResponse{
+		User:           userResp,
 	}, nil
 }
