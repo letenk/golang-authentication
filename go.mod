@@ -10,6 +10,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/uuid v1.6.0
 	github.com/google/wire v0.6.0
+	github.com/gookit/goutil v0.7.3
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/jaswdr/faker/v2 v2.9.1
 	github.com/labstack/echo/v4 v4.14.0

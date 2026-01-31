@@ -62,3 +62,14 @@ func (r *UserRepositoryImpl) FindByPhone(ctx context.Context, phone string) (*mo
 
 	return user, nil
 }
+
+func (r *UserRepositoryImpl) FindByID(ctx context.Context, id int64) (*models.User, error) {
+	user, err := models.Users.Query(
+		models.SelectWhere.Users.ID.EQ(id),
+	).One(ctx, r.db.Exec)
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
+}

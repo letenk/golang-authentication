@@ -2,119 +2,80 @@ package middleware
 
 import (
 	"context"
-	"strings"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/gommon/log"
 
-	jwt_config "github.com/letenk/golang-authentication/configs/jwt_config"
 	"github.com/letenk/golang-authentication/exceptions"
-)
-
-const (
-	ContextKeyUserID = "user_id"
-	ContextKeyEmail  = "email"
-	ContextKeyClaims = "claims"
+	"github.com/letenk/golang-authentication/internal/applications/authentication/service"
+	"github.com/letenk/golang-authentication/internal/utils/headers"
 )
 
 type AuthenticationMiddlewareImpl struct {
-	jwtConfig *jwt_config.JWTConfig
+	service service.AuthenticationService
 }
 
-func NewAuthenticationMiddleware(jwtConfig *jwt_config.JWTConfig) *AuthenticationMiddlewareImpl {
+func NewAuthenticationMiddleware(service service.AuthenticationService) *AuthenticationMiddlewareImpl {
 	return &AuthenticationMiddlewareImpl{
-		jwtConfig: jwtConfig,
+		service: service,
 	}
 }
 
 // Authenticate validates JWT token and extracts user claims
 // If required is true, returns error when no token is provided
 // If required is false, proceeds without token
-func (m *AuthenticationMiddlewareImpl) Authenticate(required bool) echo.MiddlewareFunc {
+func (impl *AuthenticationMiddlewareImpl) Authenticate(required bool) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-			// Extract token from Authorization header
-			authHeader := c.Request().Header.Get("Authorization")
-
-			if authHeader == "" {
-				if required {
-					err := exceptions.NewAuthenticationError(
-						"Unauthorized - No token provided",
-						exceptions.AuthenticationUnauthenticated,
-					)
-					log.Error("No authorization header provided")
-					return err
-				}
-				return next(c)
+		return func(ctx echo.Context) error {
+			header, err := bindHeader(ctx)
+			if err != nil {
+				return err
 			}
 
-			// Validate Bearer format
-			parts := strings.Split(authHeader, " ")
-			if len(parts) != 2 || parts[0] != "Bearer" {
-				if required {
+			if header.Authorization != nil {
+				claim, userId, err := impl.service.ClaimUser(*header.Authorization)
+				if err != nil {
 					err := exceptions.NewAuthenticationError(
-						"Invalid authorization header format",
+						err.Error(),
 						exceptions.AuthenticationBadFormat,
 					)
-					log.Error("Invalid Bearer token format")
+					log.Errorf("failed to claim user - invalid Authorization token: %s", err)
 					return err
 				}
-				return next(c)
+
+				buildHeader(header, *userId, claim)
+				requestCtx := ctx.Request().Context()
+				requestCtx = context.WithValue(requestCtx, headers.ContextHeaders, header)
+			} else if required {
+				err := exceptions.NewAuthenticationError(
+					"Unauthorized - No token provided",
+					exceptions.AuthenticationUnauthenticated,
+				)
+				log.Errorf("failed to claim user - no Authorization token provided: %s", err)
+				return err
 			}
 
-			tokenString := parts[1]
-
-			// Validate JWT token
-			claims, err := m.jwtConfig.ValidateAccessToken(tokenString)
-			if err != nil {
-				if required {
-					err := exceptions.NewAuthenticationError(
-						"Invalid or expired access token",
-						exceptions.AuthenticationInvalidToken,
-					)
-					log.Errorf("JWT validation failed: %v", err)
-					return err
-				}
-				return next(c)
-			}
-
-			// Add claims to echo context (Echo's way)
-			c.Set(ContextKeyUserID, claims.UserID)
-			c.Set(ContextKeyEmail, claims.Email)
-			c.Set(ContextKeyClaims, claims)
-
-			// Also add to request context for services
-			ctx := c.Request().Context()
-			ctx = context.WithValue(ctx, ContextKeyUserID, claims.UserID)
-			ctx = context.WithValue(ctx, ContextKeyEmail, claims.Email)
-			ctx = context.WithValue(ctx, ContextKeyClaims, claims)
-			c.SetRequest(c.Request().WithContext(ctx))
-
-			return next(c)
+			return next(ctx)
 		}
 	}
 }
 
-// ExtractUserID retrieves user ID from context
-func ExtractUserID(c echo.Context) (int64, error) {
-	userID := c.Get(ContextKeyUserID)
-	if userID == nil {
-		return 0, exceptions.NewAuthenticationError(
-			"User ID not found in context",
-			exceptions.AuthenticationUnauthenticated,
-		)
+// bindHeader binds HTTP headers to Header struct
+func bindHeader(ctx echo.Context) (*headers.Header, error) {
+	header := &headers.Header{}
+
+	if err := (&echo.DefaultBinder{}).BindHeaders(ctx, header); err != nil {
+		return nil, err
 	}
-	return userID.(int64), nil
+
+	return header, nil
 }
 
-// ExtractEmail retrieves email from context
-func ExtractEmail(c echo.Context) (string, error) {
-	email := c.Get(ContextKeyEmail)
-	if email == nil {
-		return "", exceptions.NewAuthenticationError(
-			"Email not found in context",
-			exceptions.AuthenticationUnauthenticated,
-		)
-	}
-	return email.(string), nil
+// buildHeader populates header with user authentication data
+func buildHeader(header *headers.Header, userId int64, claim *jwt.MapClaims) *headers.Header {
+	header.UserID = userId
+	header.Claim = claim
+	header.IsUserGuest = false
+	return header
 }
