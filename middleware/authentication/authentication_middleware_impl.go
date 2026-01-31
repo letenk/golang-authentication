@@ -47,6 +47,7 @@ func (impl *AuthenticationMiddlewareImpl) Authenticate(required bool) echo.Middl
 				buildHeader(header, *userId, claim)
 				requestCtx := ctx.Request().Context()
 				requestCtx = context.WithValue(requestCtx, headers.ContextHeaders, header)
+				ctx.SetRequest(ctx.Request().WithContext(requestCtx))
 			} else if required {
 				err := exceptions.NewAuthenticationError(
 					"Unauthorized - No token provided",
