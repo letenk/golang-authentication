@@ -27,3 +27,18 @@ var businessLogicReason = map[int]ErrorLogic{
 func BusinessLogicReason(code int) ErrorLogic {
 	return businessLogicReason[code]
 }
+
+var authenticationReason = map[int]ErrorLogic{
+	int(AuthenticationBadFormat):          {ErrCode: int(AuthenticationBadFormat), HttpCode: http.StatusBadRequest, Message: "bad request format"},
+	int(AuthenticationUnauthenticated):    {ErrCode: int(AuthenticationUnauthenticated), HttpCode: http.StatusUnauthorized, Message: "unauthenticated"},
+	int(AuthenticationInvalidRealm):       {ErrCode: int(AuthenticationInvalidRealm), HttpCode: http.StatusUnauthorized, Message: "invalid realm"},
+	int(AuthenticationInvalidIdentity):    {ErrCode: int(AuthenticationInvalidIdentity), HttpCode: http.StatusUnauthorized, Message: "invalid identity"},
+	int(AuthenticationInvalidCredentials): {ErrCode: int(AuthenticationInvalidCredentials), HttpCode: http.StatusUnauthorized, Message: "invalid credentials"},
+	int(AuthenticationInvalidToken):       {ErrCode: int(AuthenticationInvalidToken), HttpCode: http.StatusUnauthorized, Message: "invalid token"},
+	int(AuthenticationTokenRevoked):       {ErrCode: int(AuthenticationTokenRevoked), HttpCode: http.StatusUnauthorized, Message: "token revoked"},
+	int(AuthenticationTokenExpired):       {ErrCode: int(AuthenticationTokenExpired), HttpCode: http.StatusUnauthorized, Message: "token expired"},
+}
+
+func AuthenticationReason(code AuthenticationCode) ErrorLogic {
+	return authenticationReason[int(code)]
+}

@@ -1,10 +1,7 @@
 package validator
 
 import (
-	"strings"
-
 	"github.com/go-playground/validator/v10"
-	"github.com/labstack/echo/v4"
 )
 
 type CustomValidator struct {
@@ -22,9 +19,9 @@ func NewCustomValidator() *CustomValidator {
 
 func (cv *CustomValidator) Validate(i interface{}) error {
 	if err := cv.validator.Struct(i); err != nil {
-		// Format validation errors
-		errorMessages := FormatValidationError(err)
-		return echo.NewHTTPError(400, strings.Join(errorMessages, "; "))
+		// Return the original validation error without wrapping it
+		// This allows GlobalUnHandleErrors to format it properly as a map
+		return err
 	}
 	return nil
 }
