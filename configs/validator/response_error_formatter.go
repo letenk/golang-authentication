@@ -45,3 +45,24 @@ func formatFieldError(fe validator.FieldError) string {
 		return fmt.Sprintf("%s failed validation for '%s'", field, fe.Tag())
 	}
 }
+
+// FormatValidationErrorMap formats validation errors into map structure like Laravel
+func FormatValidationErrorMap(err error) map[string][]string {
+	errorMap := make(map[string][]string)
+
+	var ve validator.ValidationErrors
+	if errors.As(err, &ve) {
+		for _, fe := range ve {
+			field := strings.ToLower(fe.Field())
+			message := formatFieldError(fe)
+			
+			// Add error message to field's error array
+			errorMap[field] = append(errorMap[field], message)
+		}
+	} else {
+		// For non-validation errors, add to "general" field
+		errorMap["general"] = []string{err.Error()}
+	}
+
+	return errorMap
+}

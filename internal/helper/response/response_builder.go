@@ -9,11 +9,12 @@ import (
 )
 
 type body struct {
-	ErrorCode  int         `json:"code"`
-	Message    string      `json:"message"`
-	Data       interface{} `json:"data"`
-	Error      string      `json:"error"`
-	ServerTime string      `json:"serverTime"`
+	ErrorCode  int                `json:"code"`
+	Message    string             `json:"message"`
+	Data       interface{}        `json:"data"`
+	Error      string             `json:"error,omitempty"`
+	Errors     map[string][]string `json:"errors,omitempty"`
+	ServerTime string             `json:"serverTime"`
 }
 
 func Base(ctx echo.Context, httpCode int, errorCode int, message string, data interface{}, err error) error {
@@ -58,4 +59,32 @@ func SuccessWithMessage(ctx echo.Context, message string, data interface{}) erro
 
 func Error(ctx echo.Context, httpCode int, err error) error {
 	return Base(ctx, httpCode, httpCode, http.StatusText(httpCode), nil, err)
+}
+
+func ValidationError(ctx echo.Context, errors map[string][]string) error {
+	date := time.Now().Format(time.RFC1123)
+	bodyResponse := body{
+		ErrorCode:  http.StatusBadRequest,
+		Message:    "Validation Failed",
+		Data:       nil,
+		Errors:     errors,
+		ServerTime: date,
+	}
+
+	ctx.Response().Header().Add("date", date)
+	return ctx.JSON(http.StatusBadRequest, bodyResponse)
+}
+
+func ErrorWithMap(ctx echo.Context, httpCode int, message string, errors map[string][]string) error {
+	date := time.Now().Format(time.RFC1123)
+	bodyResponse := body{
+		ErrorCode:  httpCode,
+		Message:    message,
+		Data:       nil,
+		Errors:     errors,
+		ServerTime: date,
+	}
+
+	ctx.Response().Header().Add("date", date)
+	return ctx.JSON(httpCode, bodyResponse)
 }
