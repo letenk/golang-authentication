@@ -69,6 +69,10 @@ func (controller *AuthController) Login(ctx echo.Context) error {
 		return err
 	}
 
+	if validationErr := request.Validate(); validationErr != nil {
+		return validationErr
+	}
+
 	// Get client IP address
 	ipAddress := ctx.RealIP()
 

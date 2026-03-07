@@ -8,7 +8,8 @@ type RegisterRequest struct {
 }
 
 type LoginRequest struct {
-	Email      string `json:"email" validate:"required,email"`
+	Email      string `json:"email" validate:"omitempty,email"`
+	Phone      string `json:"phone" validate:"omitempty,e164"` // E.164 format: +628123456789
 	Password   string `json:"password" validate:"required"`
 	DeviceName string `json:"device_name" validate:"omitempty,max=100"`
 	DeviceID   string `json:"device_id" validate:"omitempty,max=255"`
