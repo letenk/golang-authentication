@@ -186,6 +186,113 @@ func (service *AuthServiceImpl) Login(ctx context.Context, req *dto.LoginRequest
 	}, nil
 }
 
+// RefreshToken validates the refresh token, rotates it, and returns a new token pair
+func (service *AuthServiceImpl) RefreshToken(ctx context.Context, req *dto.RefreshTokenRequest, ipAddress, userAgent string) (*dto.RefreshTokenResponse, error) {
+	// Find the token in DB
+	token, err := service.tokenRepository.FindByToken(ctx, req.RefreshToken)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, exceptions.NewAuthenticationError("Invalid refresh token", exceptions.AuthenticationInvalidToken)
+		}
+		log.Errorf("failed to find refresh token: %s", err)
+		return nil, exceptions.NewBusinessLogicError(exceptions.DataGetFailed, errors.New("failed to find refresh token"), nil)
+	}
+
+	// Check if already revoked
+	if token.RevokedAt.IsValue() {
+		return nil, exceptions.NewAuthenticationError("Refresh token has been revoked", exceptions.AuthenticationTokenRevoked)
+	}
+
+	// Check if expired
+	if token.ExpiresAt.Before(time.Now()) {
+		return nil, exceptions.NewAuthenticationError("Refresh token has expired", exceptions.AuthenticationTokenExpired)
+	}
+
+	// Generate new access token
+	newAccessToken, accessExpiresAt, err := service.jwtConfig.GenerateAccessToken(token.UserID)
+	if err != nil {
+		log.Errorf("failed to generate access token: %s", err)
+		return nil, exceptions.NewBusinessLogicError(exceptions.DataCreateFailed, errors.New("failed to generate access token"), nil)
+	}
+
+	// Generate new refresh token
+	newRefreshToken, refreshExpiresAt := service.jwtConfig.GenerateRefreshToken()
+
+	// Token rotation: revoke old token and record which token replaced it
+	err = service.tokenRepository.ReplaceToken(ctx, req.RefreshToken, newRefreshToken)
+	if err != nil {
+		log.Errorf("failed to rotate refresh token: %s", err)
+		return nil, exceptions.NewBusinessLogicError(exceptions.DataUpdateFailed, errors.New("failed to rotate refresh token"), nil)
+	}
+
+	// Create new refresh token — carry over device info from the old token
+	deviceName := token.DeviceName.GetOrZero()
+	if deviceName == "" {
+		deviceName = "Unknown Device"
+	}
+
+	tokenSetter := &models.RefreshTokenSetter{
+		UserID:     omit.From(token.UserID),
+		Token:      omit.From(newRefreshToken),
+		DeviceName: omitnull.From(deviceName),
+		DeviceID:   omitnull.From(token.DeviceID.GetOrZero()),
+		IPAddress:  omitnull.From(ipAddress),
+		UserAgent:  omitnull.From(userAgent),
+		ExpiresAt:  omit.From(refreshExpiresAt),
+	}
+
+	_, err = service.tokenRepository.Create(ctx, tokenSetter)
+	if err != nil {
+		log.Errorf("failed to create new refresh token: %s", err)
+		return nil, exceptions.NewBusinessLogicError(exceptions.DataCreateFailed, errors.New("failed to create new refresh token"), nil)
+	}
+
+	return &dto.RefreshTokenResponse{
+		AccessToken:           newAccessToken,
+		RefreshToken:          newRefreshToken,
+		AccessTokenExpiresAt:  accessExpiresAt.Format(time.RFC3339),
+		RefreshTokenExpiresAt: refreshExpiresAt.Format(time.RFC3339),
+	}, nil
+}
+
+// Logout revokes the given refresh token (logout from single device)
+func (service *AuthServiceImpl) Logout(ctx context.Context, refreshToken string) error {
+	// Find the token
+	token, err := service.tokenRepository.FindByToken(ctx, refreshToken)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return exceptions.NewAuthenticationError("Invalid refresh token", exceptions.AuthenticationInvalidToken)
+		}
+		log.Errorf("failed to find refresh token: %s", err)
+		return exceptions.NewBusinessLogicError(exceptions.DataGetFailed, errors.New("failed to find refresh token"), nil)
+	}
+
+	// Check if already revoked
+	if token.RevokedAt.IsValue() {
+		return exceptions.NewAuthenticationError("Refresh token has already been revoked", exceptions.AuthenticationTokenRevoked)
+	}
+
+	// Revoke the token
+	err = service.tokenRepository.Revoke(ctx, refreshToken)
+	if err != nil {
+		log.Errorf("failed to revoke refresh token: %s", err)
+		return exceptions.NewBusinessLogicError(exceptions.DataUpdateFailed, errors.New("failed to revoke refresh token"), nil)
+	}
+
+	return nil
+}
+
+// LogoutAll revokes all active refresh tokens for the user (logout from all devices)
+func (service *AuthServiceImpl) LogoutAll(ctx context.Context, userID int64) (int, error) {
+	count, err := service.tokenRepository.RevokeAllByUserID(ctx, userID)
+	if err != nil {
+		log.Errorf("failed to revoke all refresh tokens for user %d: %s", userID, err)
+		return 0, exceptions.NewBusinessLogicError(exceptions.DataUpdateFailed, errors.New("failed to logout all devices"), nil)
+	}
+
+	return count, nil
+}
+
 // GetMe retrieves current user information with active sessions
 func (service *AuthServiceImpl) GetMe(ctx context.Context, userID int64) (*dto.GetMeResponse, error) {
 	// Find user by ID
