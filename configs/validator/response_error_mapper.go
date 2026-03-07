@@ -67,6 +67,14 @@ func MapperErrorCode(err error) (errHttpCode int, errBusinessCode int, errMessag
 		return errorLogic.HttpCode, errorLogic.ErrCode, errorMsg, nil, errorMap
 	}
 
+	// Handle custom field ValidationError (e.g. "email or phone required")
+	if valErr, ok := err.(exceptions.ValidationError); ok {
+		errorMap := map[string][]string{
+			valErr.Field: {valErr.Message},
+		}
+		return http.StatusBadRequest, http.StatusBadRequest, "Validation Failed", nil, errorMap
+	}
+
 	// Handle ValidationErrors from validator
 	if _, ok := err.(validator.ValidationErrors); ok {
 		// Return validation errors as structured map
