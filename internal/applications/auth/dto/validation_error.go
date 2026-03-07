@@ -9,6 +9,15 @@ func (r RegisterRequest) Validate() error {
 	return nil
 }
 
+// Validate custom validation for LoginRequest
+func (r LoginRequest) Validate() error {
+	// At least email or phone must be provided
+	if r.Email == "" && r.Phone == "" {
+		return NewValidationError("email or phone", "at least one of email or phone is required")
+	}
+	return nil
+}
+
 // ValidationError untuk custom error message
 type ValidationError struct {
 	Field   string

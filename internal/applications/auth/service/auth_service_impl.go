@@ -114,20 +114,29 @@ func (service *AuthServiceImpl) Register(ctx context.Context, param *dto.Paramet
 
 // Login authenticates user and returns access token with refresh token
 func (service *AuthServiceImpl) Login(ctx context.Context, req *dto.LoginRequest, ipAddress, userAgent string) (*dto.LoginResponse, error) {
-	// Find user by email
-	user, err := service.userRepository.FindByEmail(ctx, req.Email)
+	// Find user by email or phone
+	var user *models.User
+	var err error
+
+	if req.Email != "" {
+		user, err = service.userRepository.FindByEmail(ctx, req.Email)
+	} else {
+		cleanedPhone := utils.EnsurePhoneNumber(req.Phone)
+		user, err = service.userRepository.FindByPhone(ctx, cleanedPhone)
+	}
+
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, exceptions.NewAuthenticationError("Invalid email or password", exceptions.AuthenticationInvalidCredentials)
+			return nil, exceptions.NewAuthenticationError("Invalid credentials", exceptions.AuthenticationInvalidCredentials)
 		}
-		log.Errorf("failed to find user by email: %s", err)
+		log.Errorf("failed to find user: %s", err)
 		return nil, exceptions.NewBusinessLogicError(exceptions.DataGetFailed, errors.New("failed to find user"), nil)
 	}
 
 	// Compare password
 	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password))
 	if err != nil {
-		return nil, exceptions.NewAuthenticationError("Invalid email or password", exceptions.AuthenticationInvalidCredentials)
+		return nil, exceptions.NewAuthenticationError("Invalid credentials", exceptions.AuthenticationInvalidCredentials)
 	}
 
 	// Generate access token
