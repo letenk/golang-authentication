@@ -1,11 +1,20 @@
 # Build once, reuse
-.PHONY: run build migration-build migration-create migration-up migration-down migration-status
+.PHONY: run build test test-coverage migration-build migration-create migration-up migration-down migration-status
 
 run:
 	go run cmd/main.go
 
 build:
 	go build -o main cmd/main.go
+
+# Run all tests
+test:
+	go test ./... -count=1
+
+# Run all tests with coverage report
+test-coverage:
+	go test ./... -count=1 -coverprofile=coverage.out
+	go tool cover -func=coverage.out
 
 # Build migration binary (only when needed)
 migration-build:
@@ -54,6 +63,8 @@ help:
 	@echo "  make migration-down     - Rollback last migration"
 	@echo "  make migration-status   - Show migration status"
 	@echo "  make migration-version  - Show current migration version"
+	@echo "  make test               - Run all tests"
+	@echo "  make test-coverage      - Run all tests with coverage report"
 	@echo "  make clean              - Remove built binaries"
 
 .DEFAULT_GOAL := help
