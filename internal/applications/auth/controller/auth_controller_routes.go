@@ -10,5 +10,8 @@ func (controller *AuthController) AddRoutes(e *echo.Echo, authMiddleware middlew
 
 	groupV1.POST("/register", controller.Register)
 	groupV1.POST("/login", controller.Login)
+	groupV1.POST("/refresh", controller.RefreshToken)
+	groupV1.POST("/logout", controller.Logout)
+	groupV1.POST("/logout-all", controller.LogoutAll, authMiddleware.Authenticate(true))
 	groupV1.GET("/me", controller.GetMe, authMiddleware.Authenticate(true))
 }

@@ -83,6 +83,60 @@ func (controller *AuthController) Login(ctx echo.Context) error {
 	return response.SuccessWithMessage(ctx, "Login successful", result)
 }
 
+func (controller *AuthController) RefreshToken(ctx echo.Context) error {
+	request := &dto.RefreshTokenRequest{}
+
+	err := helper.BindAndValidate(ctx, request)
+	if err != nil {
+		return err
+	}
+
+	ipAddress := ctx.RealIP()
+	userAgent := ctx.Request().UserAgent()
+
+	result, err := controller.authService.RefreshToken(ctx.Request().Context(), request, ipAddress, userAgent)
+	if err != nil {
+		return err
+	}
+
+	return response.SuccessWithMessage(ctx, "Token refreshed successfully", result)
+}
+
+func (controller *AuthController) Logout(ctx echo.Context) error {
+	request := &dto.LogoutRequest{}
+
+	err := helper.BindAndValidate(ctx, request)
+	if err != nil {
+		return err
+	}
+
+	err = controller.authService.Logout(ctx.Request().Context(), request.RefreshToken)
+	if err != nil {
+		return err
+	}
+
+	return response.SuccessWithMessage(ctx, "Logged out successfully", &dto.LogoutResponse{
+		Message: "Logged out successfully",
+	})
+}
+
+func (controller *AuthController) LogoutAll(ctx echo.Context) error {
+	header, err := utils.GetContextHeaders(ctx, headers.ContextHeaders)
+	if err != nil {
+		return err
+	}
+
+	count, err := controller.authService.LogoutAll(ctx.Request().Context(), header.UserID)
+	if err != nil {
+		return err
+	}
+
+	return response.SuccessWithMessage(ctx, "Logged out from all devices successfully", &dto.LogoutAllResponse{
+		Message:             "Logged out from all devices successfully",
+		RevokedSessionCount: count,
+	})
+}
+
 func (controller *AuthController) GetMe(ctx echo.Context) error {
 	// Extract header from context using GetContextHeaders pattern
 	header, err := utils.GetContextHeaders(ctx, headers.ContextHeaders)
