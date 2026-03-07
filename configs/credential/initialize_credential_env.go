@@ -8,6 +8,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/labstack/gommon/log"
 	"github.com/spf13/viper"
+	"github.com/subosito/gotenv"
 )
 
 const (
@@ -28,6 +29,10 @@ func InitCredentialEnv() error {
 
 	Config = NewAppConfig()
 
+	if err := gotenv.Load(".env"); err != nil {
+		log.Warnf("No .env file found, using OS environment variables only")
+	}
+
 	credential := GetCredential()
 
 	// Setup environment variable reading
@@ -43,7 +48,7 @@ func InitCredentialEnv() error {
 	credential.AddConfigPath(credentialConfigPath)
 	credential.SetConfigType(fileCredentialType)
 
-	log.Debugf("credential file :" + credential.ConfigFileUsed())
+	log.Debugf("credential file: %s", credential.ConfigFileUsed())
 	err := credential.ReadInConfig()
 	if err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
