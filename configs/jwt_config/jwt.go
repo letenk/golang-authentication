@@ -65,7 +65,7 @@ func parseDuration(durationStr string) (time.Duration, error) {
 
 // GenerateAccessToken generates a new JWT access token
 func (h *JWTConfig) GenerateAccessToken(userID int64) (string, time.Time, error) {
-	now := time.Now()
+	now := time.Now().UTC()
 	expiresAt := now.Add(h.accessTokenExpire)
 
 	claims := JWTClaims{
@@ -89,7 +89,7 @@ func (h *JWTConfig) GenerateAccessToken(userID int64) (string, time.Time, error)
 // GenerateRefreshToken generates a new UUID-based refresh token
 func (h *JWTConfig) GenerateRefreshToken() (string, time.Time) {
 	token := uuid.New().String()
-	expiresAt := time.Now().Add(h.refreshTokenExpire)
+	expiresAt := time.Now().UTC().Add(h.refreshTokenExpire)
 	return token, expiresAt
 }
 

@@ -39,7 +39,7 @@ func (r *RefreshTokenRepositoryImpl) FindByToken(ctx context.Context, token stri
 }
 
 func (r *RefreshTokenRepositoryImpl) FindActiveByUserID(ctx context.Context, userID int64) ([]*models.RefreshToken, error) {
-	now := time.Now()
+	now := time.Now().UTC()
 
 	tokens, err := models.RefreshTokens.Query(
 		models.SelectWhere.RefreshTokens.UserID.EQ(userID),
@@ -56,7 +56,7 @@ func (r *RefreshTokenRepositoryImpl) FindActiveByUserID(ctx context.Context, use
 }
 
 func (r *RefreshTokenRepositoryImpl) CountActiveByUserID(ctx context.Context, userID int64) (int, error) {
-	now := time.Now()
+	now := time.Now().UTC()
 
 	count, err := models.RefreshTokens.Query(
 		models.SelectWhere.RefreshTokens.UserID.EQ(userID),
@@ -72,7 +72,7 @@ func (r *RefreshTokenRepositoryImpl) CountActiveByUserID(ctx context.Context, us
 }
 
 func (r *RefreshTokenRepositoryImpl) Revoke(ctx context.Context, token string) error {
-	now := time.Now()
+	now := time.Now().UTC()
 
 	setter := &models.RefreshTokenSetter{
 		RevokedAt: omitnull.From(now),
@@ -87,7 +87,7 @@ func (r *RefreshTokenRepositoryImpl) Revoke(ctx context.Context, token string) e
 }
 
 func (r *RefreshTokenRepositoryImpl) ReplaceToken(ctx context.Context, oldToken, newToken string) error {
-	now := time.Now()
+	now := time.Now().UTC()
 
 	setter := &models.RefreshTokenSetter{
 		RevokedAt:       omitnull.From(now),
@@ -103,7 +103,7 @@ func (r *RefreshTokenRepositoryImpl) ReplaceToken(ctx context.Context, oldToken,
 }
 
 func (r *RefreshTokenRepositoryImpl) RevokeAllByUserID(ctx context.Context, userID int64) (int, error) {
-	now := time.Now()
+	now := time.Now().UTC()
 
 	setter := &models.RefreshTokenSetter{
 		RevokedAt: omitnull.From(now),
