@@ -213,7 +213,7 @@ func (service *AuthServiceImpl) RefreshToken(ctx context.Context, req *dto.Refre
 	}
 
 	// Check if expired
-	if token.ExpiresAt.Before(time.Now()) {
+	if token.ExpiresAt.Before(time.Now().UTC()) {
 		return nil, exceptions.NewAuthenticationError("Refresh token has expired", exceptions.AuthenticationTokenExpired)
 	}
 

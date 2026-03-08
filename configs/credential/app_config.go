@@ -48,7 +48,7 @@ type OTPConfig struct {
 
 func (db *DBConnectionConfig) GetDSNPostgreSQL() string {
 	return fmt.Sprintf(
-		"postgres://%s:%s@%s:%s/%s?sslmode=%s",
+		"postgres://%s:%s@%s:%s/%s?sslmode=%s&TimeZone=UTC",
 		db.User,
 		db.Password,
 		db.Host,
