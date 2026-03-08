@@ -44,6 +44,7 @@ func (r *UserRepositoryImpl) Create(ctx context.Context, entity *models.UserSett
 func (r *UserRepositoryImpl) FindByEmail(ctx context.Context, email string) (*models.User, error) {
 	user, err := models.Users.Query(
 		models.SelectWhere.Users.Email.EQ(email),
+		models.SelectWhere.Users.DeletedAt.IsNull(),
 	).One(ctx, r.db.Exec)
 	if err != nil {
 		return nil, err
@@ -55,6 +56,7 @@ func (r *UserRepositoryImpl) FindByEmail(ctx context.Context, email string) (*mo
 func (r *UserRepositoryImpl) FindByPhone(ctx context.Context, phone string) (*models.User, error) {
 	user, err := models.Users.Query(
 		models.SelectWhere.Users.Phone.EQ(phone),
+		models.SelectWhere.Users.DeletedAt.IsNull(),
 	).One(ctx, r.db.Exec)
 	if err != nil {
 		return nil, err
@@ -66,6 +68,7 @@ func (r *UserRepositoryImpl) FindByPhone(ctx context.Context, phone string) (*mo
 func (r *UserRepositoryImpl) FindByID(ctx context.Context, id int64) (*models.User, error) {
 	user, err := models.Users.Query(
 		models.SelectWhere.Users.ID.EQ(id),
+		models.SelectWhere.Users.DeletedAt.IsNull(),
 	).One(ctx, r.db.Exec)
 	if err != nil {
 		return nil, err
