@@ -10,6 +10,7 @@ import (
 	"github.com/letenk/golang-authentication/configs/database"
 )
 
+
 type UserRepositoryImpl struct {
 	db *database.BobDB
 }
@@ -75,4 +76,23 @@ func (r *UserRepositoryImpl) FindByID(ctx context.Context, id int64) (*models.Us
 	}
 
 	return user, nil
+}
+
+func (r *UserRepositoryImpl) SoftDeleteByID(ctx context.Context, id int64, deletedBy int64) error {
+	now := time.Now().UTC()
+
+	setter := &models.UserSetter{
+		DeletedAt: omitnull.From(now),
+		DeletedBy: omitnull.From(deletedBy),
+		UpdatedAt: omitnull.From(now),
+		UpdatedBy: omit.From(deletedBy),
+	}
+
+	_, err := models.Users.Update(
+		models.UpdateWhere.Users.ID.EQ(id),
+		models.UpdateWhere.Users.DeletedAt.IsNull(),
+		setter.UpdateMod(),
+	).One(ctx, r.db.Exec)
+
+	return err
 }

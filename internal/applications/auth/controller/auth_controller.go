@@ -155,3 +155,16 @@ func (controller *AuthController) GetMe(ctx echo.Context) error {
 
 	return response.SuccessWithMessage(ctx, "User retrieved successfully", result)
 }
+
+func (controller *AuthController) DeleteMe(ctx echo.Context) error {
+	header, err := utils.GetContextHeaders(ctx, headers.ContextHeaders)
+	if err != nil {
+		return err
+	}
+
+	if err := controller.authService.DeleteAccount(ctx.Request().Context(), header.UserID); err != nil {
+		return err
+	}
+
+	return response.SuccessWithMessage(ctx, "Account deleted successfully", &struct{}{})
+}

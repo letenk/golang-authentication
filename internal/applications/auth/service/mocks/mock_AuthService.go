@@ -24,6 +24,53 @@ func (_m *MockAuthService) EXPECT() *MockAuthService_Expecter {
 	return &MockAuthService_Expecter{mock: &_m.Mock}
 }
 
+// DeleteAccount provides a mock function with given fields: ctx, userID
+func (_m *MockAuthService) DeleteAccount(ctx context.Context, userID int64) error {
+	ret := _m.Called(ctx, userID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteAccount")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, int64) error); ok {
+		r0 = rf(ctx, userID)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockAuthService_DeleteAccount_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteAccount'
+type MockAuthService_DeleteAccount_Call struct {
+	*mock.Call
+}
+
+// DeleteAccount is a helper method to define mock.On call
+//   - ctx context.Context
+//   - userID int64
+func (_e *MockAuthService_Expecter) DeleteAccount(ctx interface{}, userID interface{}) *MockAuthService_DeleteAccount_Call {
+	return &MockAuthService_DeleteAccount_Call{Call: _e.mock.On("DeleteAccount", ctx, userID)}
+}
+
+func (_c *MockAuthService_DeleteAccount_Call) Run(run func(ctx context.Context, userID int64)) *MockAuthService_DeleteAccount_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(int64))
+	})
+	return _c
+}
+
+func (_c *MockAuthService_DeleteAccount_Call) Return(_a0 error) *MockAuthService_DeleteAccount_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockAuthService_DeleteAccount_Call) RunAndReturn(run func(context.Context, int64) error) *MockAuthService_DeleteAccount_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetMe provides a mock function with given fields: ctx, userID
 func (_m *MockAuthService) GetMe(ctx context.Context, userID int64) (*dto.GetMeResponse, error) {
 	ret := _m.Called(ctx, userID)

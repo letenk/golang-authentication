@@ -54,6 +54,7 @@ func setupRoutes(e *echo.Echo, mockSvc *authMocks.MockAuthService) {
 	g.POST("/logout", c.Logout)
 	g.POST("/logout-all", c.LogoutAll, stubAuthMiddleware(1))
 	g.GET("/me", c.GetMe, stubAuthMiddleware(1))
+	g.DELETE("/me", c.DeleteMe, stubAuthMiddleware(1))
 }
 
 func jsonBody(t *testing.T, v any) *bytes.Buffer {
@@ -359,6 +360,47 @@ func TestAuthController_LogoutAll(t *testing.T) {
 
 			req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout-all", nil)
 			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			rec := httptest.NewRecorder()
+
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, tt.wantStatus, rec.Code)
+		})
+	}
+}
+
+// --- DeleteMe ---
+
+func TestAuthController_DeleteMe(t *testing.T) {
+	tests := []struct {
+		name       string
+		setupMock  func(ms *authMocks.MockAuthService)
+		wantStatus int
+	}{
+		{
+			name: "success delete account",
+			setupMock: func(ms *authMocks.MockAuthService) {
+				ms.EXPECT().DeleteAccount(mock.Anything, int64(1)).Return(nil)
+			},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name: "service error",
+			setupMock: func(ms *authMocks.MockAuthService) {
+				ms.EXPECT().DeleteAccount(mock.Anything, int64(1)).Return(exceptions.NewBusinessLogicError(exceptions.DataDeleteFailed, nil, nil))
+			},
+			wantStatus: http.StatusUnprocessableEntity,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := newTestEcho()
+			mockSvc := authMocks.NewMockAuthService(t)
+			tt.setupMock(mockSvc)
+			setupRoutes(e, mockSvc)
+
+			req := httptest.NewRequest(http.MethodDelete, "/api/v1/auth/me", nil)
 			rec := httptest.NewRecorder()
 
 			e.ServeHTTP(rec, req)

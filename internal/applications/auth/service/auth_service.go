@@ -14,4 +14,5 @@ type AuthService interface {
 	Logout(ctx context.Context, refreshToken string) error
 	LogoutAll(ctx context.Context, userID int64) (int, error)
 	GetMe(ctx context.Context, userID int64) (*dto.GetMeResponse, error)
+	DeleteAccount(ctx context.Context, userID int64) error
 }

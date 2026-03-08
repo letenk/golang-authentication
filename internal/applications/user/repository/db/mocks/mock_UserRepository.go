@@ -259,6 +259,54 @@ func (_c *MockUserRepository_FindByPhone_Call) RunAndReturn(run func(context.Con
 	return _c
 }
 
+// SoftDeleteByID provides a mock function with given fields: ctx, id, deletedBy
+func (_m *MockUserRepository) SoftDeleteByID(ctx context.Context, id int64, deletedBy int64) error {
+	ret := _m.Called(ctx, id, deletedBy)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SoftDeleteByID")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, int64, int64) error); ok {
+		r0 = rf(ctx, id, deletedBy)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockUserRepository_SoftDeleteByID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SoftDeleteByID'
+type MockUserRepository_SoftDeleteByID_Call struct {
+	*mock.Call
+}
+
+// SoftDeleteByID is a helper method to define mock.On call
+//   - ctx context.Context
+//   - id int64
+//   - deletedBy int64
+func (_e *MockUserRepository_Expecter) SoftDeleteByID(ctx interface{}, id interface{}, deletedBy interface{}) *MockUserRepository_SoftDeleteByID_Call {
+	return &MockUserRepository_SoftDeleteByID_Call{Call: _e.mock.On("SoftDeleteByID", ctx, id, deletedBy)}
+}
+
+func (_c *MockUserRepository_SoftDeleteByID_Call) Run(run func(ctx context.Context, id int64, deletedBy int64)) *MockUserRepository_SoftDeleteByID_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(int64), args[2].(int64))
+	})
+	return _c
+}
+
+func (_c *MockUserRepository_SoftDeleteByID_Call) Return(_a0 error) *MockUserRepository_SoftDeleteByID_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockUserRepository_SoftDeleteByID_Call) RunAndReturn(run func(context.Context, int64, int64) error) *MockUserRepository_SoftDeleteByID_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // NewMockUserRepository creates a new instance of MockUserRepository. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewMockUserRepository(t interface {

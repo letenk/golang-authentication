@@ -329,6 +329,20 @@ func (service *AuthServiceImpl) GetMe(ctx context.Context, userID int64) (*dto.G
 	}
 
 	return &dto.GetMeResponse{
-		User:           userResp,
+		User: userResp,
 	}, nil
+}
+
+// DeleteAccount soft-deletes the user and revokes all their refresh tokens
+func (service *AuthServiceImpl) DeleteAccount(ctx context.Context, userID int64) error {
+	if err := service.userRepository.SoftDeleteByID(ctx, userID, userID); err != nil {
+		log.Errorf("failed to soft delete user %d: %s", userID, err)
+		return exceptions.NewBusinessLogicError(exceptions.DataDeleteFailed, errors.New("failed to delete account"), nil)
+	}
+
+	if _, err := service.tokenRepository.RevokeAllByUserID(ctx, userID); err != nil {
+		log.Errorf("failed to revoke tokens after account deletion for user %d: %s", userID, err)
+	}
+
+	return nil
 }
