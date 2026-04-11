@@ -630,6 +630,100 @@ func (_c *MockAuthService_RevokeSession_Call) RunAndReturn(run func(context.Cont
 	return _c
 }
 
+// ForgotPassword provides a mock function with given fields: ctx, email
+func (_m *MockAuthService) ForgotPassword(ctx context.Context, email string) error {
+	ret := _m.Called(ctx, email)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ForgotPassword")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) error); ok {
+		r0 = rf(ctx, email)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockAuthService_ForgotPassword_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ForgotPassword'
+type MockAuthService_ForgotPassword_Call struct {
+	*mock.Call
+}
+
+// ForgotPassword is a helper method to define mock.On call
+//   - ctx context.Context
+//   - email string
+func (_e *MockAuthService_Expecter) ForgotPassword(ctx interface{}, email interface{}) *MockAuthService_ForgotPassword_Call {
+	return &MockAuthService_ForgotPassword_Call{Call: _e.mock.On("ForgotPassword", ctx, email)}
+}
+
+func (_c *MockAuthService_ForgotPassword_Call) Run(run func(ctx context.Context, email string)) *MockAuthService_ForgotPassword_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockAuthService_ForgotPassword_Call) Return(_a0 error) *MockAuthService_ForgotPassword_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockAuthService_ForgotPassword_Call) RunAndReturn(run func(context.Context, string) error) *MockAuthService_ForgotPassword_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ResetPassword provides a mock function with given fields: ctx, req
+func (_m *MockAuthService) ResetPassword(ctx context.Context, req *dto.ResetPasswordRequest) error {
+	ret := _m.Called(ctx, req)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ResetPassword")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, *dto.ResetPasswordRequest) error); ok {
+		r0 = rf(ctx, req)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockAuthService_ResetPassword_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ResetPassword'
+type MockAuthService_ResetPassword_Call struct {
+	*mock.Call
+}
+
+// ResetPassword is a helper method to define mock.On call
+//   - ctx context.Context
+//   - req *dto.ResetPasswordRequest
+func (_e *MockAuthService_Expecter) ResetPassword(ctx interface{}, req interface{}) *MockAuthService_ResetPassword_Call {
+	return &MockAuthService_ResetPassword_Call{Call: _e.mock.On("ResetPassword", ctx, req)}
+}
+
+func (_c *MockAuthService_ResetPassword_Call) Run(run func(ctx context.Context, req *dto.ResetPasswordRequest)) *MockAuthService_ResetPassword_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(*dto.ResetPasswordRequest))
+	})
+	return _c
+}
+
+func (_c *MockAuthService_ResetPassword_Call) Return(_a0 error) *MockAuthService_ResetPassword_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockAuthService_ResetPassword_Call) RunAndReturn(run func(context.Context, *dto.ResetPasswordRequest) error) *MockAuthService_ResetPassword_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // NewMockAuthService creates a new instance of MockAuthService. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewMockAuthService(t interface {

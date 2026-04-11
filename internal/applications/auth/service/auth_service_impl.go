@@ -15,25 +15,42 @@ import (
 	"github.com/letenk/golang-authentication/internal/applications/auth/dto"
 	refreshTokenRepo "github.com/letenk/golang-authentication/internal/applications/refresh_token/repository/db"
 	userRepo "github.com/letenk/golang-authentication/internal/applications/user/repository/db"
+	emailService "github.com/letenk/golang-authentication/internal/applications/email/service"
+	otpRepo "github.com/letenk/golang-authentication/internal/applications/password_reset/repository/db"
+	"github.com/letenk/golang-authentication/internal/applications/transaction"
+	"github.com/letenk/golang-authentication/configs/credential"
 	"github.com/letenk/golang-authentication/internal/utils"
+	"github.com/stephenafamo/bob"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type AuthServiceImpl struct {
+	trxService      transaction.TrxService
 	userRepository  userRepo.UserRepository
 	tokenRepository refreshTokenRepo.RefreshTokenRepository
+	otpRepository   otpRepo.PasswordResetOTPRepository
+	emailService    emailService.EmailService
 	jwtConfig       *jwt_config.JWTConfig
+	otpConfig       *credential.OTPConfig
 }
 
 func NewAuthService(
+	trxService transaction.TrxService,
 	userRepository userRepo.UserRepository,
 	tokenRepository refreshTokenRepo.RefreshTokenRepository,
+	otpRepository otpRepo.PasswordResetOTPRepository,
+	emailService emailService.EmailService,
 	jwtConfig *jwt_config.JWTConfig,
+	otpConfig *credential.OTPConfig,
 ) *AuthServiceImpl {
 	return &AuthServiceImpl{
+		trxService:      trxService,
 		userRepository:  userRepository,
 		tokenRepository: tokenRepository,
+		otpRepository:   otpRepository,
+		emailService:    emailService,
 		jwtConfig:       jwtConfig,
+		otpConfig:       otpConfig,
 	}
 }
 
@@ -457,6 +474,110 @@ func (service *AuthServiceImpl) RevokeSession(ctx context.Context, userID int64,
 		}
 		log.Errorf("failed to revoke session %d for user %d: %s", sessionID, userID, err)
 		return exceptions.NewBusinessLogicError(exceptions.DataUpdateFailed, errors.New("failed to revoke session"), nil)
+	}
+
+	return nil
+}
+
+// ForgotPassword sends an OTP to the user's email for password reset
+func (service *AuthServiceImpl) ForgotPassword(ctx context.Context, email string) error {
+	user, err := service.userRepository.FindByEmail(ctx, email)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			// Don't reveal whether the email exists
+			return nil
+		}
+		log.Errorf("failed to find user by email for forgot password: %s", err)
+		return exceptions.NewBusinessLogicError(exceptions.DataGetFailed, errors.New("failed to process request"), nil)
+	}
+
+	otpExpire, err := time.ParseDuration(service.otpConfig.Expire)
+	if err != nil {
+		log.Errorf("failed to parse OTP expire duration: %s", err)
+		return exceptions.NewBusinessLogicError(exceptions.DataCreateFailed, errors.New("failed to process request"), nil)
+	}
+
+	otp, err := utils.GenerateOTP(service.otpConfig.Length)
+	if err != nil {
+		log.Errorf("failed to generate OTP: %s", err)
+		return exceptions.NewBusinessLogicError(exceptions.DataCreateFailed, errors.New("failed to process request"), nil)
+	}
+
+	expiresAt := time.Now().UTC().Add(otpExpire)
+
+	err = service.trxService.WithTx(ctx, func(tx bob.Executor) error {
+		if err := service.otpRepository.InvalidatePreviousByUserIDWithExec(ctx, tx, user.ID); err != nil {
+			return err
+		}
+		_, err := service.otpRepository.CreateWithExec(ctx, tx, user.ID, otp, expiresAt)
+		return err
+	})
+	if err != nil {
+		log.Errorf("failed to create OTP for user %d: %s", user.ID, err)
+		return exceptions.NewBusinessLogicError(exceptions.DataCreateFailed, errors.New("failed to process request"), nil)
+	}
+
+	name := user.Name.GetOrZero()
+	if name == "" {
+		name = email
+	}
+
+	// Send OTP email in background to avoid blocking the response.
+	// Uses an independent context with timeout to prevent hanging, and recover to catch panics.
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Errorf("panic in SendOTP goroutine: %v", r)
+			}
+		}()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = ctx
+
+		if err := service.emailService.SendOTP(email, name, otp); err != nil {
+			log.Errorf("failed to send OTP email to %s: %s", email, err)
+		}
+	}()
+
+	return nil
+}
+
+// ResetPassword validates the OTP and updates the user's password
+func (service *AuthServiceImpl) ResetPassword(ctx context.Context, req *dto.ResetPasswordRequest) error {
+	user, err := service.userRepository.FindByEmail(ctx, req.Email)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return exceptions.NewBusinessLogicError(exceptions.DataNotFound, errors.New("invalid email or OTP"), nil)
+		}
+		log.Errorf("failed to find user by email for reset password: %s", err)
+		return exceptions.NewBusinessLogicError(exceptions.DataGetFailed, errors.New("failed to process request"), nil)
+	}
+
+	otpRecord, err := service.otpRepository.FindValidByUserAndCode(ctx, user.ID, req.OTP)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return exceptions.NewBusinessLogicError(exceptions.InvalidArgument, errors.New("invalid or expired OTP"), nil)
+		}
+		log.Errorf("failed to find OTP for user %d: %s", user.ID, err)
+		return exceptions.NewBusinessLogicError(exceptions.DataGetFailed, errors.New("failed to process request"), nil)
+	}
+
+	hashedPassword, err := utils.HashPassword(req.NewPassword)
+	if err != nil {
+		log.Errorf("failed to hash password for user %d: %s", user.ID, err)
+		return exceptions.NewBusinessLogicError(exceptions.DataUpdateFailed, errors.New("failed to reset password"), nil)
+	}
+
+	err = service.trxService.WithTx(ctx, func(tx bob.Executor) error {
+		if err := service.otpRepository.MarkUsedWithExec(ctx, tx, otpRecord.ID); err != nil {
+			return err
+		}
+		return service.userRepository.UpdatePasswordWithExec(ctx, tx, user.ID, hashedPassword)
+	})
+	if err != nil {
+		log.Errorf("failed to reset password for user %d: %s", user.ID, err)
+		return exceptions.NewBusinessLogicError(exceptions.DataUpdateFailed, errors.New("failed to reset password"), nil)
 	}
 
 	return nil

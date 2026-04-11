@@ -1,0 +1,5 @@
+psql:
+  dsn: "${PSQL_DSN}"
+
+output: "bob"
+pkgname: "models"

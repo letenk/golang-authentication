@@ -5,6 +5,7 @@ package mocks
 import (
 	context "context"
 
+	bob "github.com/stephenafamo/bob"
 	mock "github.com/stretchr/testify/mock"
 
 	models "github.com/letenk/golang-authentication/bob/models"
@@ -363,6 +364,55 @@ func (_c *MockUserRepository_UpdateByID_Call) Return(_a0 *models.User, _a1 error
 }
 
 func (_c *MockUserRepository_UpdateByID_Call) RunAndReturn(run func(context.Context, int64, *models.UserSetter) (*models.User, error)) *MockUserRepository_UpdateByID_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// UpdatePasswordWithExec provides a mock function with given fields: ctx, exec, userID, hashedPassword
+func (_m *MockUserRepository) UpdatePasswordWithExec(ctx context.Context, exec bob.Executor, userID int64, hashedPassword string) error {
+	ret := _m.Called(ctx, exec, userID, hashedPassword)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpdatePasswordWithExec")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, bob.Executor, int64, string) error); ok {
+		r0 = rf(ctx, exec, userID, hashedPassword)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockUserRepository_UpdatePasswordWithExec_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdatePasswordWithExec'
+type MockUserRepository_UpdatePasswordWithExec_Call struct {
+	*mock.Call
+}
+
+// UpdatePasswordWithExec is a helper method to define mock.On call
+//   - ctx context.Context
+//   - exec bob.Executor
+//   - userID int64
+//   - hashedPassword string
+func (_e *MockUserRepository_Expecter) UpdatePasswordWithExec(ctx, exec, userID, hashedPassword interface{}) *MockUserRepository_UpdatePasswordWithExec_Call {
+	return &MockUserRepository_UpdatePasswordWithExec_Call{Call: _e.mock.On("UpdatePasswordWithExec", ctx, exec, userID, hashedPassword)}
+}
+
+func (_c *MockUserRepository_UpdatePasswordWithExec_Call) Run(run func(ctx context.Context, exec bob.Executor, userID int64, hashedPassword string)) *MockUserRepository_UpdatePasswordWithExec_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(bob.Executor), args[2].(int64), args[3].(string))
+	})
+	return _c
+}
+
+func (_c *MockUserRepository_UpdatePasswordWithExec_Call) Return(_a0 error) *MockUserRepository_UpdatePasswordWithExec_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockUserRepository_UpdatePasswordWithExec_Call) RunAndReturn(run func(context.Context, bob.Executor, int64, string) error) *MockUserRepository_UpdatePasswordWithExec_Call {
 	_c.Call.Return(run)
 	return _c
 }

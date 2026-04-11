@@ -12,9 +12,10 @@ import (
 )
 
 type Factory struct {
-	baseGooseDBVersionMods GooseDBVersionModSlice
-	baseRefreshTokenMods   RefreshTokenModSlice
-	baseUserMods           UserModSlice
+	baseGooseDBVersionMods   GooseDBVersionModSlice
+	basePasswordResetOtpMods PasswordResetOtpModSlice
+	baseRefreshTokenMods     RefreshTokenModSlice
+	baseUserMods             UserModSlice
 }
 
 func New() *Factory {
@@ -44,6 +45,40 @@ func (f *Factory) FromExistingGooseDBVersion(m *models.GooseDBVersion) *GooseDBV
 	o.VersionID = func() int64 { return m.VersionID }
 	o.IsApplied = func() bool { return m.IsApplied }
 	o.Tstamp = func() time.Time { return m.Tstamp }
+
+	return o
+}
+
+func (f *Factory) NewPasswordResetOtp(mods ...PasswordResetOtpMod) *PasswordResetOtpTemplate {
+	return f.NewPasswordResetOtpWithContext(context.Background(), mods...)
+}
+
+func (f *Factory) NewPasswordResetOtpWithContext(ctx context.Context, mods ...PasswordResetOtpMod) *PasswordResetOtpTemplate {
+	o := &PasswordResetOtpTemplate{f: f}
+
+	if f != nil {
+		f.basePasswordResetOtpMods.Apply(ctx, o)
+	}
+
+	PasswordResetOtpModSlice(mods).Apply(ctx, o)
+
+	return o
+}
+
+func (f *Factory) FromExistingPasswordResetOtp(m *models.PasswordResetOtp) *PasswordResetOtpTemplate {
+	o := &PasswordResetOtpTemplate{f: f, alreadyPersisted: true}
+
+	o.ID = func() int64 { return m.ID }
+	o.UserID = func() int64 { return m.UserID }
+	o.Code = func() string { return m.Code }
+	o.ExpiresAt = func() time.Time { return m.ExpiresAt }
+	o.UsedAt = func() null.Val[time.Time] { return m.UsedAt }
+	o.CreatedAt = func() null.Val[time.Time] { return m.CreatedAt }
+
+	ctx := context.Background()
+	if m.R.User != nil {
+		PasswordResetOtpMods.WithExistingUser(m.R.User).Apply(ctx, o)
+	}
 
 	return o
 }
@@ -123,6 +158,9 @@ func (f *Factory) FromExistingUser(m *models.User) *UserTemplate {
 	o.VerifiedAt = func() null.Val[time.Time] { return m.VerifiedAt }
 
 	ctx := context.Background()
+	if len(m.R.PasswordResetOtps) > 0 {
+		UserMods.AddExistingPasswordResetOtps(m.R.PasswordResetOtps...).Apply(ctx, o)
+	}
 	if len(m.R.RefreshTokens) > 0 {
 		UserMods.AddExistingRefreshTokens(m.R.RefreshTokens...).Apply(ctx, o)
 	}
@@ -154,6 +192,14 @@ func (f *Factory) ClearBaseGooseDBVersionMods() {
 
 func (f *Factory) AddBaseGooseDBVersionMod(mods ...GooseDBVersionMod) {
 	f.baseGooseDBVersionMods = append(f.baseGooseDBVersionMods, mods...)
+}
+
+func (f *Factory) ClearBasePasswordResetOtpMods() {
+	f.basePasswordResetOtpMods = nil
+}
+
+func (f *Factory) AddBasePasswordResetOtpMod(mods ...PasswordResetOtpMod) {
+	f.basePasswordResetOtpMods = append(f.basePasswordResetOtpMods, mods...)
 }
 
 func (f *Factory) ClearBaseRefreshTokenMods() {

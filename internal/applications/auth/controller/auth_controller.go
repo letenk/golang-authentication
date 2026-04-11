@@ -168,3 +168,31 @@ func (controller *AuthController) DeleteMe(ctx echo.Context) error {
 
 	return response.SuccessWithMessage(ctx, "Account deleted successfully", &struct{}{})
 }
+
+func (controller *AuthController) ForgotPassword(ctx echo.Context) error {
+	request := &dto.ForgotPasswordRequest{}
+
+	if err := helper.BindAndValidate(ctx, request); err != nil {
+		return err
+	}
+
+	if err := controller.authService.ForgotPassword(ctx.Request().Context(), request.Email); err != nil {
+		return err
+	}
+
+	return response.SuccessWithMessage(ctx, "If the email is registered, an OTP will be sent", &struct{}{})
+}
+
+func (controller *AuthController) ResetPassword(ctx echo.Context) error {
+	request := &dto.ResetPasswordRequest{}
+
+	if err := helper.BindAndValidate(ctx, request); err != nil {
+		return err
+	}
+
+	if err := controller.authService.ResetPassword(ctx.Request().Context(), request); err != nil {
+		return err
+	}
+
+	return response.SuccessWithMessage(ctx, "Password reset successfully", &struct{}{})
+}

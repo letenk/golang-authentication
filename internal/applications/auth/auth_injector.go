@@ -6,10 +6,14 @@ package auth
 import (
 	"github.com/google/wire"
 
-	"github.com/letenk/golang-authentication/configs/jwt_config"
+	"github.com/letenk/golang-authentication/configs/credential"
 	"github.com/letenk/golang-authentication/configs/database"
+	"github.com/letenk/golang-authentication/configs/jwt_config"
 	authService "github.com/letenk/golang-authentication/internal/applications/auth/service"
+	emailSvc "github.com/letenk/golang-authentication/internal/applications/email/service"
+	otpRepo "github.com/letenk/golang-authentication/internal/applications/password_reset/repository/db"
 	tokenRepo "github.com/letenk/golang-authentication/internal/applications/refresh_token/repository/db"
+	"github.com/letenk/golang-authentication/internal/applications/transaction"
 	userRepo "github.com/letenk/golang-authentication/internal/applications/user/repository/db"
 )
 
@@ -20,12 +24,22 @@ var providerSetAuth = wire.NewSet(
 	tokenRepo.NewRefreshTokenRepository,
 	wire.Bind(new(tokenRepo.RefreshTokenRepository), new(*tokenRepo.RefreshTokenRepositoryImpl)),
 
+	otpRepo.NewPasswordResetOTPRepository,
+	wire.Bind(new(otpRepo.PasswordResetOTPRepository), new(*otpRepo.PasswordResetOTPRepositoryImpl)),
+
+	transaction.NewTrxService,
+
 	authService.NewAuthService,
 	wire.Bind(new(authService.AuthService), new(*authService.AuthServiceImpl)),
 )
 
 // InitializeAuthService initializes all dependencies for AuthController
-func InitializeAuthService(db *database.BobDB, jwtConfig *jwt_config.JWTConfig) *authService.AuthServiceImpl {
+func InitializeAuthService(
+	db *database.BobDB,
+	jwtConfig *jwt_config.JWTConfig,
+	emailService emailSvc.EmailService,
+	otpConfig *credential.OTPConfig,
+) *authService.AuthServiceImpl {
 	wire.Build(providerSetAuth)
 	return nil
 }

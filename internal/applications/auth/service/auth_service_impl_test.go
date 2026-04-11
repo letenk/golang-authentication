@@ -14,7 +14,10 @@ import (
 	"github.com/letenk/golang-authentication/exceptions"
 	"github.com/letenk/golang-authentication/internal/applications/auth/dto"
 	"github.com/letenk/golang-authentication/internal/applications/auth/service"
+	emailSvcMocks "github.com/letenk/golang-authentication/internal/applications/email/service/mocks"
+	otpRepoMocks "github.com/letenk/golang-authentication/internal/applications/password_reset/repository/db/mocks"
 	refreshMocks "github.com/letenk/golang-authentication/internal/applications/refresh_token/repository/db/mocks"
+	trxMocks "github.com/letenk/golang-authentication/internal/applications/transaction/mocks"
 	userMocks "github.com/letenk/golang-authentication/internal/applications/user/repository/db/mocks"
 	"github.com/letenk/golang-authentication/internal/utils"
 	"github.com/stretchr/testify/assert"
@@ -41,7 +44,11 @@ func newTestService(t *testing.T) (*service.AuthServiceImpl, *userMocks.MockUser
 	t.Helper()
 	mockUser := userMocks.NewMockUserRepository(t)
 	mockToken := refreshMocks.NewMockRefreshTokenRepository(t)
-	svc := service.NewAuthService(mockUser, mockToken, newTestJWTConfig(t))
+	mockOTP := otpRepoMocks.NewMockPasswordResetOTPRepository(t)
+	mockEmail := emailSvcMocks.NewMockEmailService(t)
+	mockTrx := trxMocks.NewMockTrxService(t)
+	otpConfig := &credential.OTPConfig{Expire: "5m", Length: 6}
+	svc := service.NewAuthService(mockTrx, mockUser, mockToken, mockOTP, mockEmail, newTestJWTConfig(t), otpConfig)
 	return svc, mockUser, mockToken
 }
 
