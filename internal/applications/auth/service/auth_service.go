@@ -17,4 +17,6 @@ type AuthService interface {
 	DeleteAccount(ctx context.Context, userID int64) error
 	GetSessions(ctx context.Context, userID int64) ([]*dto.ActiveSessionResponse, error)
 	RevokeSession(ctx context.Context, userID int64, sessionID int64) error
+	UpdateProfile(ctx context.Context, userID int64, req *dto.UpdateProfileRequest) (*dto.UserResponse, error)
+	UpdatePassword(ctx context.Context, userID int64, req *dto.UpdatePasswordRequest) error
 }

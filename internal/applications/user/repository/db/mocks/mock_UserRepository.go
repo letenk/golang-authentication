@@ -307,6 +307,66 @@ func (_c *MockUserRepository_SoftDeleteByID_Call) RunAndReturn(run func(context.
 	return _c
 }
 
+// UpdateByID provides a mock function with given fields: ctx, id, setter
+func (_m *MockUserRepository) UpdateByID(ctx context.Context, id int64, setter *models.UserSetter) (*models.User, error) {
+	ret := _m.Called(ctx, id, setter)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpdateByID")
+	}
+
+	var r0 *models.User
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, int64, *models.UserSetter) (*models.User, error)); ok {
+		return rf(ctx, id, setter)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, int64, *models.UserSetter) *models.User); ok {
+		r0 = rf(ctx, id, setter)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*models.User)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, int64, *models.UserSetter) error); ok {
+		r1 = rf(ctx, id, setter)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockUserRepository_UpdateByID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdateByID'
+type MockUserRepository_UpdateByID_Call struct {
+	*mock.Call
+}
+
+// UpdateByID is a helper method to define mock.On call
+//   - ctx context.Context
+//   - id int64
+//   - setter *models.UserSetter
+func (_e *MockUserRepository_Expecter) UpdateByID(ctx interface{}, id interface{}, setter interface{}) *MockUserRepository_UpdateByID_Call {
+	return &MockUserRepository_UpdateByID_Call{Call: _e.mock.On("UpdateByID", ctx, id, setter)}
+}
+
+func (_c *MockUserRepository_UpdateByID_Call) Run(run func(ctx context.Context, id int64, setter *models.UserSetter)) *MockUserRepository_UpdateByID_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(int64), args[2].(*models.UserSetter))
+	})
+	return _c
+}
+
+func (_c *MockUserRepository_UpdateByID_Call) Return(_a0 *models.User, _a1 error) *MockUserRepository_UpdateByID_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockUserRepository_UpdateByID_Call) RunAndReturn(run func(context.Context, int64, *models.UserSetter) (*models.User, error)) *MockUserRepository_UpdateByID_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // NewMockUserRepository creates a new instance of MockUserRepository. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewMockUserRepository(t interface {

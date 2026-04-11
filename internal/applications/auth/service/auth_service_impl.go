@@ -374,6 +374,80 @@ func (service *AuthServiceImpl) GetSessions(ctx context.Context, userID int64) (
 	return sessions, nil
 }
 
+// UpdateProfile updates the user's full name and/or phone number
+func (service *AuthServiceImpl) UpdateProfile(ctx context.Context, userID int64, req *dto.UpdateProfileRequest) (*dto.UserResponse, error) {
+	setter := &models.UserSetter{
+		UpdatedBy: omit.From(userID),
+	}
+
+	if req.Phone != "" {
+		cleanedPhone := utils.EnsurePhoneNumber(req.Phone)
+		existingUser, err := service.userRepository.FindByPhone(ctx, cleanedPhone)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			log.Errorf("failed to check phone duplication for user %d: %s", userID, err)
+			return nil, exceptions.NewBusinessLogicError(exceptions.DataGetFailed, errors.New("failed to update profile"), nil)
+		}
+		if existingUser != nil && existingUser.ID != userID {
+			return nil, exceptions.NewBusinessLogicError(exceptions.DataConflict, errors.New("phone already in use"), nil)
+		}
+		setter.Phone = omitnull.From(cleanedPhone)
+	}
+
+	if req.FullName != "" {
+		setter.Name = omitnull.From(req.FullName)
+	}
+
+	user, err := service.userRepository.UpdateByID(ctx, userID, setter)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, exceptions.NewBusinessLogicError(exceptions.DataNotFound, errors.New("user not found"), nil)
+		}
+		log.Errorf("failed to update profile for user %d: %s", userID, err)
+		return nil, exceptions.NewBusinessLogicError(exceptions.DataUpdateFailed, errors.New("failed to update profile"), nil)
+	}
+
+	return &dto.UserResponse{
+		ID:         user.ID,
+		Email:      user.Email.GetOrZero(),
+		FullName:   user.Name.GetOrZero(),
+		Phone:      user.Phone.GetOrZero(),
+		IsVerified: user.IsVerified.GetOrZero(),
+	}, nil
+}
+
+// UpdatePassword changes the user's password after validating the old one
+func (service *AuthServiceImpl) UpdatePassword(ctx context.Context, userID int64, req *dto.UpdatePasswordRequest) error {
+	user, err := service.userRepository.FindByID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return exceptions.NewBusinessLogicError(exceptions.DataNotFound, errors.New("user not found"), nil)
+		}
+		log.Errorf("failed to find user %d: %s", userID, err)
+		return exceptions.NewBusinessLogicError(exceptions.DataGetFailed, errors.New("failed to update password"), nil)
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.OldPassword)); err != nil {
+		return exceptions.NewBusinessLogicError(exceptions.InvalidArgument, errors.New("old password is incorrect"), nil)
+	}
+
+	hashedPassword, err := utils.HashPassword(req.NewPassword)
+	if err != nil {
+		log.Errorf("failed to hash password for user %d: %s", userID, err)
+		return exceptions.NewBusinessLogicError(exceptions.DataUpdateFailed, errors.New("failed to update password"), nil)
+	}
+
+	_, err = service.userRepository.UpdateByID(ctx, userID, &models.UserSetter{
+		Password:  omit.From(hashedPassword),
+		UpdatedBy: omit.From(userID),
+	})
+	if err != nil {
+		log.Errorf("failed to update password for user %d: %s", userID, err)
+		return exceptions.NewBusinessLogicError(exceptions.DataUpdateFailed, errors.New("failed to update password"), nil)
+	}
+
+	return nil
+}
+
 // RevokeSession revokes a specific session by ID, ensuring it belongs to the given user
 func (service *AuthServiceImpl) RevokeSession(ctx context.Context, userID int64, sessionID int64) error {
 	err := service.tokenRepository.RevokeByIDForUser(ctx, sessionID, userID)
