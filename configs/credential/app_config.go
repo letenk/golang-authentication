@@ -6,6 +6,7 @@ type AppConfig struct {
 	Application ApplicationConfig `mapstructure:"application"`
 	Database    DatabaseConfig    `mapstructure:"db"`
 	Auth        AuthConfig        `mapstructure:"auth"`
+	Email       EmailConfig       `mapstructure:"email"`
 }
 
 type ApplicationConfig struct {
@@ -33,6 +34,18 @@ type DBConnectionConfig struct {
 type AuthConfig struct {
 	JWT JWTConfig `mapstructure:"jwt"`
 	OTP OTPConfig `mapstructure:"otp"`
+}
+
+type SMTPConfig struct {
+	Host     string `mapstructure:"host"`
+	Port     int    `mapstructure:"port"`
+	Username string `mapstructure:"username"`
+	Password string `mapstructure:"password"`
+	From     string `mapstructure:"from"`
+}
+
+type EmailConfig struct {
+	SMTP SMTPConfig `mapstructure:"smtp"`
 }
 
 type JWTConfig struct {

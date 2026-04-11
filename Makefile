@@ -1,5 +1,9 @@
+# Load .env variables
+include .env
+export
+
 # Build once, reuse
-.PHONY: run build test test-coverage migration-build migration-create migration-up migration-down migration-status
+.PHONY: run build test test-coverage migration-build migration-create migration-up migration-down migration-status bob-gen
 
 run:
 	go run cmd/main.go
@@ -47,6 +51,10 @@ migration-version:
 	@if [ ! -f migration ]; then $(MAKE) migration-build; fi
 	./migration postgres version
 
+# Generate Bob ORM models from database schema
+bob-gen:
+	PSQL_DSN=postgres://$(DB_CONFIGS_USER):$(DB_CONFIGS_PASSWORD)@$(DB_CONFIGS_HOST):$(DB_CONFIGS_PORT)/$(DB_CONFIGS_NAME)?sslmode=$(DB_CONFIGS_SSLMODE) go run github.com/stephenafamo/bob/gen/bobgen-psql@latest
+
 # Clean built binaries
 clean:
 	rm -f main migration
@@ -63,6 +71,7 @@ help:
 	@echo "  make migration-down     - Rollback last migration"
 	@echo "  make migration-status   - Show migration status"
 	@echo "  make migration-version  - Show current migration version"
+	@echo "  make bob-gen            - Generate Bob ORM models from DB schema"
 	@echo "  make test               - Run all tests"
 	@echo "  make test-coverage      - Run all tests with coverage report"
 	@echo "  make clean              - Remove built binaries"

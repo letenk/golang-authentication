@@ -119,4 +119,11 @@ func bindEnvVariables(v *viper.Viper) {
 	// OTP
 	v.BindEnv("auth.otp.expire")
 	v.BindEnv("auth.otp.length")
+
+	// Email SMTP
+	v.BindEnv("email.smtp.host")
+	v.BindEnv("email.smtp.port")
+	v.BindEnv("email.smtp.username")
+	v.BindEnv("email.smtp.password")
+	v.BindEnv("email.smtp.from")
 }
