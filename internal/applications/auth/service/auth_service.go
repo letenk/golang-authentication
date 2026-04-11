@@ -15,4 +15,6 @@ type AuthService interface {
 	LogoutAll(ctx context.Context, userID int64) (int, error)
 	GetMe(ctx context.Context, userID int64) (*dto.GetMeResponse, error)
 	DeleteAccount(ctx context.Context, userID int64) error
+	GetSessions(ctx context.Context, userID int64) ([]*dto.ActiveSessionResponse, error)
+	RevokeSession(ctx context.Context, userID int64, sessionID int64) error
 }

@@ -14,4 +14,5 @@ type RefreshTokenRepository interface {
 	Revoke(ctx context.Context, token string) error
 	ReplaceToken(ctx context.Context, oldToken, newToken string) error
 	RevokeAllByUserID(ctx context.Context, userID int64) (int, error)
+	RevokeByIDForUser(ctx context.Context, sessionID int64, userID int64) error
 }

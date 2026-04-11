@@ -346,3 +346,44 @@ func (service *AuthServiceImpl) DeleteAccount(ctx context.Context, userID int64)
 
 	return nil
 }
+
+// GetSessions returns all active sessions for the given user
+func (service *AuthServiceImpl) GetSessions(ctx context.Context, userID int64) ([]*dto.ActiveSessionResponse, error) {
+	tokens, err := service.tokenRepository.FindActiveByUserID(ctx, userID)
+	if err != nil {
+		log.Errorf("failed to get active sessions for user %d: %s", userID, err)
+		return nil, exceptions.NewBusinessLogicError(exceptions.DataGetFailed, errors.New("failed to get sessions"), nil)
+	}
+
+	sessions := make([]*dto.ActiveSessionResponse, 0, len(tokens))
+	for _, t := range tokens {
+		session := &dto.ActiveSessionResponse{
+			ID:        t.ID,
+			DeviceName: t.DeviceName.GetOrZero(),
+			DeviceID:   t.DeviceID.GetOrZero(),
+			IPAddress:  t.IPAddress.GetOrZero(),
+			UserAgent:  t.UserAgent.GetOrZero(),
+		}
+		if t.CreatedAt.IsValue() {
+			session.CreatedAt = t.CreatedAt.GetOrZero().UTC().Format(time.RFC3339)
+			session.LastUsed = t.CreatedAt.GetOrZero().UTC().Format(time.RFC3339)
+		}
+		sessions = append(sessions, session)
+	}
+
+	return sessions, nil
+}
+
+// RevokeSession revokes a specific session by ID, ensuring it belongs to the given user
+func (service *AuthServiceImpl) RevokeSession(ctx context.Context, userID int64, sessionID int64) error {
+	err := service.tokenRepository.RevokeByIDForUser(ctx, sessionID, userID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return exceptions.NewBusinessLogicError(exceptions.DataNotFound, errors.New("session not found"), nil)
+		}
+		log.Errorf("failed to revoke session %d for user %d: %s", sessionID, userID, err)
+		return exceptions.NewBusinessLogicError(exceptions.DataUpdateFailed, errors.New("failed to revoke session"), nil)
+	}
+
+	return nil
+}
