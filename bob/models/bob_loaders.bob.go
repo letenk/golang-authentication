@@ -17,14 +17,16 @@ import (
 var Preload = getPreloaders()
 
 type preloaders struct {
-	RefreshToken refreshTokenPreloader
-	User         userPreloader
+	PasswordResetOtp passwordResetOtpPreloader
+	RefreshToken     refreshTokenPreloader
+	User             userPreloader
 }
 
 func getPreloaders() preloaders {
 	return preloaders{
-		RefreshToken: buildRefreshTokenPreloader(),
-		User:         buildUserPreloader(),
+		PasswordResetOtp: buildPasswordResetOtpPreloader(),
+		RefreshToken:     buildRefreshTokenPreloader(),
+		User:             buildUserPreloader(),
 	}
 }
 
@@ -35,14 +37,16 @@ var (
 )
 
 type thenLoaders[Q orm.Loadable] struct {
-	RefreshToken refreshTokenThenLoader[Q]
-	User         userThenLoader[Q]
+	PasswordResetOtp passwordResetOtpThenLoader[Q]
+	RefreshToken     refreshTokenThenLoader[Q]
+	User             userThenLoader[Q]
 }
 
 func getThenLoaders[Q orm.Loadable]() thenLoaders[Q] {
 	return thenLoaders[Q]{
-		RefreshToken: buildRefreshTokenThenLoader[Q](),
-		User:         buildUserThenLoader[Q](),
+		PasswordResetOtp: buildPasswordResetOtpThenLoader[Q](),
+		RefreshToken:     buildRefreshTokenThenLoader[Q](),
+		User:             buildUserThenLoader[Q](),
 	}
 }
 

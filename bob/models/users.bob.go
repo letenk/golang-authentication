@@ -57,13 +57,14 @@ type UsersQuery = *psql.ViewQuery[*User, UserSlice]
 
 // userR is where relationships are stored.
 type userR struct {
-	RefreshTokens      RefreshTokenSlice // refresh_tokens.refresh_tokens_user_id_fkey
-	CreatedBy          *User             // users.fk_users_created_by
-	ReverseCreatedBies UserSlice         // users.fk_users_created_by__self_join_reverse
-	DeletedBy          *User             // users.fk_users_deleted_by
-	ReverseDeletedBies UserSlice         // users.fk_users_deleted_by__self_join_reverse
-	UpdatedBy          *User             // users.fk_users_updated_by
-	ReverseUpdatedBies UserSlice         // users.fk_users_updated_by__self_join_reverse
+	PasswordResetOtps  PasswordResetOtpSlice // password_reset_otps.password_reset_otps_user_id_fkey
+	RefreshTokens      RefreshTokenSlice     // refresh_tokens.refresh_tokens_user_id_fkey
+	CreatedBy          *User                 // users.fk_users_created_by
+	ReverseCreatedBies UserSlice             // users.fk_users_created_by__self_join_reverse
+	DeletedBy          *User                 // users.fk_users_deleted_by
+	ReverseDeletedBies UserSlice             // users.fk_users_deleted_by__self_join_reverse
+	UpdatedBy          *User                 // users.fk_users_updated_by
+	ReverseUpdatedBies UserSlice             // users.fk_users_updated_by__self_join_reverse
 }
 
 func buildUserColumns(alias string) userColumns {
@@ -676,6 +677,30 @@ func (o UserSlice) ReloadAll(ctx context.Context, exec bob.Executor) error {
 	return nil
 }
 
+// PasswordResetOtps starts a query for related objects on password_reset_otps
+func (o *User) PasswordResetOtps(mods ...bob.Mod[*dialect.SelectQuery]) PasswordResetOtpsQuery {
+	return PasswordResetOtps.Query(append(mods,
+		sm.Where(PasswordResetOtps.Columns.UserID.EQ(psql.Arg(o.ID))),
+	)...)
+}
+
+func (os UserSlice) PasswordResetOtps(mods ...bob.Mod[*dialect.SelectQuery]) PasswordResetOtpsQuery {
+	pkID := make(pgtypes.Array[int64], 0, len(os))
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		pkID = append(pkID, o.ID)
+	}
+	PKArgExpr := psql.Select(sm.Columns(
+		psql.F("unnest", psql.Cast(psql.Arg(pkID), "bigint[]")),
+	))
+
+	return PasswordResetOtps.Query(append(mods,
+		sm.Where(psql.Group(PasswordResetOtps.Columns.UserID).OP("IN", PKArgExpr)),
+	)...)
+}
+
 // RefreshTokens starts a query for related objects on refresh_tokens
 func (o *User) RefreshTokens(mods ...bob.Mod[*dialect.SelectQuery]) RefreshTokensQuery {
 	return RefreshTokens.Query(append(mods,
@@ -842,6 +867,74 @@ func (os UserSlice) ReverseUpdatedBies(mods ...bob.Mod[*dialect.SelectQuery]) Us
 	return Users.Query(append(mods,
 		sm.Where(psql.Group(Users.Columns.UpdatedBy).OP("IN", PKArgExpr)),
 	)...)
+}
+
+func insertUserPasswordResetOtps0(ctx context.Context, exec bob.Executor, passwordResetOtps1 []*PasswordResetOtpSetter, user0 *User) (PasswordResetOtpSlice, error) {
+	for i := range passwordResetOtps1 {
+		passwordResetOtps1[i].UserID = omit.From(user0.ID)
+	}
+
+	ret, err := PasswordResetOtps.Insert(bob.ToMods(passwordResetOtps1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertUserPasswordResetOtps0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachUserPasswordResetOtps0(ctx context.Context, exec bob.Executor, count int, passwordResetOtps1 PasswordResetOtpSlice, user0 *User) (PasswordResetOtpSlice, error) {
+	setter := &PasswordResetOtpSetter{
+		UserID: omit.From(user0.ID),
+	}
+
+	err := passwordResetOtps1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachUserPasswordResetOtps0: %w", err)
+	}
+
+	return passwordResetOtps1, nil
+}
+
+func (user0 *User) InsertPasswordResetOtps(ctx context.Context, exec bob.Executor, related ...*PasswordResetOtpSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	passwordResetOtps1, err := insertUserPasswordResetOtps0(ctx, exec, related, user0)
+	if err != nil {
+		return err
+	}
+
+	user0.R.PasswordResetOtps = append(user0.R.PasswordResetOtps, passwordResetOtps1...)
+
+	for _, rel := range passwordResetOtps1 {
+		rel.R.User = user0
+	}
+	return nil
+}
+
+func (user0 *User) AttachPasswordResetOtps(ctx context.Context, exec bob.Executor, related ...*PasswordResetOtp) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	passwordResetOtps1 := PasswordResetOtpSlice(related)
+
+	_, err = attachUserPasswordResetOtps0(ctx, exec, len(related), passwordResetOtps1, user0)
+	if err != nil {
+		return err
+	}
+
+	user0.R.PasswordResetOtps = append(user0.R.PasswordResetOtps, passwordResetOtps1...)
+
+	for _, rel := range related {
+		rel.R.User = user0
+	}
+
+	return nil
 }
 
 func insertUserRefreshTokens0(ctx context.Context, exec bob.Executor, refreshTokens1 []*RefreshTokenSetter, user0 *User) (RefreshTokenSlice, error) {
@@ -1308,6 +1401,20 @@ func (o *User) Preload(name string, retrieved any) error {
 	}
 
 	switch name {
+	case "PasswordResetOtps":
+		rels, ok := retrieved.(PasswordResetOtpSlice)
+		if !ok {
+			return fmt.Errorf("user cannot load %T as %q", retrieved, name)
+		}
+
+		o.R.PasswordResetOtps = rels
+
+		for _, rel := range rels {
+			if rel != nil {
+				rel.R.User = o
+			}
+		}
+		return nil
 	case "RefreshTokens":
 		rels, ok := retrieved.(RefreshTokenSlice)
 		if !ok {
@@ -1456,6 +1563,7 @@ func buildUserPreloader() userPreloader {
 }
 
 type userThenLoader[Q orm.Loadable] struct {
+	PasswordResetOtps  func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
 	RefreshTokens      func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
 	CreatedBy          func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
 	ReverseCreatedBies func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
@@ -1466,6 +1574,9 @@ type userThenLoader[Q orm.Loadable] struct {
 }
 
 func buildUserThenLoader[Q orm.Loadable]() userThenLoader[Q] {
+	type PasswordResetOtpsLoadInterface interface {
+		LoadPasswordResetOtps(context.Context, bob.Executor, ...bob.Mod[*dialect.SelectQuery]) error
+	}
 	type RefreshTokensLoadInterface interface {
 		LoadRefreshTokens(context.Context, bob.Executor, ...bob.Mod[*dialect.SelectQuery]) error
 	}
@@ -1489,6 +1600,12 @@ func buildUserThenLoader[Q orm.Loadable]() userThenLoader[Q] {
 	}
 
 	return userThenLoader[Q]{
+		PasswordResetOtps: thenLoadBuilder[Q](
+			"PasswordResetOtps",
+			func(ctx context.Context, exec bob.Executor, retrieved PasswordResetOtpsLoadInterface, mods ...bob.Mod[*dialect.SelectQuery]) error {
+				return retrieved.LoadPasswordResetOtps(ctx, exec, mods...)
+			},
+		),
 		RefreshTokens: thenLoadBuilder[Q](
 			"RefreshTokens",
 			func(ctx context.Context, exec bob.Executor, retrieved RefreshTokensLoadInterface, mods ...bob.Mod[*dialect.SelectQuery]) error {
@@ -1532,6 +1649,67 @@ func buildUserThenLoader[Q orm.Loadable]() userThenLoader[Q] {
 			},
 		),
 	}
+}
+
+// LoadPasswordResetOtps loads the user's PasswordResetOtps into the .R struct
+func (o *User) LoadPasswordResetOtps(ctx context.Context, exec bob.Executor, mods ...bob.Mod[*dialect.SelectQuery]) error {
+	if o == nil {
+		return nil
+	}
+
+	// Reset the relationship
+	o.R.PasswordResetOtps = nil
+
+	related, err := o.PasswordResetOtps(mods...).All(ctx, exec)
+	if err != nil {
+		return err
+	}
+
+	for _, rel := range related {
+		rel.R.User = o
+	}
+
+	o.R.PasswordResetOtps = related
+	return nil
+}
+
+// LoadPasswordResetOtps loads the user's PasswordResetOtps into the .R struct
+func (os UserSlice) LoadPasswordResetOtps(ctx context.Context, exec bob.Executor, mods ...bob.Mod[*dialect.SelectQuery]) error {
+	if len(os) == 0 {
+		return nil
+	}
+
+	passwordResetOtps, err := os.PasswordResetOtps(mods...).All(ctx, exec)
+	if err != nil {
+		return err
+	}
+
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+
+		o.R.PasswordResetOtps = nil
+	}
+
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+
+		for _, rel := range passwordResetOtps {
+
+			if !(o.ID == rel.UserID) {
+				continue
+			}
+
+			rel.R.User = o
+
+			o.R.PasswordResetOtps = append(o.R.PasswordResetOtps, rel)
+		}
+	}
+
+	return nil
 }
 
 // LoadRefreshTokens loads the user's RefreshTokens into the .R struct
@@ -1942,6 +2120,7 @@ func (os UserSlice) LoadReverseUpdatedBies(ctx context.Context, exec bob.Executo
 
 type userJoins[Q dialect.Joinable] struct {
 	typ                string
+	PasswordResetOtps  modAs[Q, passwordResetOtpColumns]
 	RefreshTokens      modAs[Q, refreshTokenColumns]
 	CreatedBy          modAs[Q, userColumns]
 	ReverseCreatedBies modAs[Q, userColumns]
@@ -1958,6 +2137,20 @@ func (j userJoins[Q]) aliasedAs(alias string) userJoins[Q] {
 func buildUserJoins[Q dialect.Joinable](cols userColumns, typ string) userJoins[Q] {
 	return userJoins[Q]{
 		typ: typ,
+		PasswordResetOtps: modAs[Q, passwordResetOtpColumns]{
+			c: PasswordResetOtps.Columns,
+			f: func(to passwordResetOtpColumns) bob.Mod[Q] {
+				mods := make(mods.QueryMods[Q], 0, 1)
+
+				{
+					mods = append(mods, dialect.Join[Q](typ, PasswordResetOtps.Name().As(to.Alias())).On(
+						to.UserID.EQ(cols.ID),
+					))
+				}
+
+				return mods
+			},
+		},
 		RefreshTokens: modAs[Q, refreshTokenColumns]{
 			c: RefreshTokens.Columns,
 			f: func(to refreshTokenColumns) bob.Mod[Q] {

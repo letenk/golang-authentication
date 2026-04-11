@@ -11,6 +11,9 @@ var testDB bob.Transactor[bob.Tx]
 // Make sure the type GooseDBVersion runs hooks after queries
 var _ bob.HookableType = &GooseDBVersion{}
 
+// Make sure the type PasswordResetOtp runs hooks after queries
+var _ bob.HookableType = &PasswordResetOtp{}
+
 // Make sure the type RefreshToken runs hooks after queries
 var _ bob.HookableType = &RefreshToken{}
 

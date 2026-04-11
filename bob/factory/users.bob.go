@@ -60,6 +60,7 @@ type UserTemplate struct {
 }
 
 type userR struct {
+	PasswordResetOtps  []*userRPasswordResetOtpsR
 	RefreshTokens      []*userRRefreshTokensR
 	CreatedBy          *userRCreatedByR
 	ReverseCreatedBies []*userRReverseCreatedBiesR
@@ -69,6 +70,10 @@ type userR struct {
 	ReverseUpdatedBies []*userRReverseUpdatedBiesR
 }
 
+type userRPasswordResetOtpsR struct {
+	number int
+	o      *PasswordResetOtpTemplate
+}
 type userRRefreshTokensR struct {
 	number int
 	o      *RefreshTokenTemplate
@@ -105,6 +110,19 @@ func (o *UserTemplate) Apply(ctx context.Context, mods ...UserMod) {
 // setModelRels creates and sets the relationships on *models.User
 // according to the relationships in the template. Nothing is inserted into the db
 func (t UserTemplate) setModelRels(o *models.User) {
+	if t.r.PasswordResetOtps != nil {
+		rel := models.PasswordResetOtpSlice{}
+		for _, r := range t.r.PasswordResetOtps {
+			related := r.o.BuildMany(r.number)
+			for _, rel := range related {
+				rel.UserID = o.ID // h2
+				rel.R.User = o
+			}
+			rel = append(rel, related...)
+		}
+		o.R.PasswordResetOtps = rel
+	}
+
 	if t.r.RefreshTokens != nil {
 		rel := models.RefreshTokenSlice{}
 		for _, r := range t.r.RefreshTokens {
@@ -347,6 +365,26 @@ func ensureCreatableUser(m *models.UserSetter) {
 func (o *UserTemplate) insertOptRels(ctx context.Context, exec bob.Executor, m *models.User) error {
 	var err error
 
+	isPasswordResetOtpsDone, _ := userRelPasswordResetOtpsCtx.Value(ctx)
+	if !isPasswordResetOtpsDone && o.r.PasswordResetOtps != nil {
+		ctx = userRelPasswordResetOtpsCtx.WithValue(ctx, true)
+		for _, r := range o.r.PasswordResetOtps {
+			if r.o.alreadyPersisted {
+				m.R.PasswordResetOtps = append(m.R.PasswordResetOtps, r.o.Build())
+			} else {
+				rel0, err := r.o.CreateMany(ctx, exec, r.number)
+				if err != nil {
+					return err
+				}
+
+				err = m.AttachPasswordResetOtps(ctx, exec, rel0...)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
 	isRefreshTokensDone, _ := userRelRefreshTokensCtx.Value(ctx)
 	if !isRefreshTokensDone && o.r.RefreshTokens != nil {
 		ctx = userRelRefreshTokensCtx.WithValue(ctx, true)
@@ -354,12 +392,12 @@ func (o *UserTemplate) insertOptRels(ctx context.Context, exec bob.Executor, m *
 			if r.o.alreadyPersisted {
 				m.R.RefreshTokens = append(m.R.RefreshTokens, r.o.Build())
 			} else {
-				rel0, err := r.o.CreateMany(ctx, exec, r.number)
+				rel1, err := r.o.CreateMany(ctx, exec, r.number)
 				if err != nil {
 					return err
 				}
 
-				err = m.AttachRefreshTokens(ctx, exec, rel0...)
+				err = m.AttachRefreshTokens(ctx, exec, rel1...)
 				if err != nil {
 					return err
 				}
@@ -374,12 +412,12 @@ func (o *UserTemplate) insertOptRels(ctx context.Context, exec bob.Executor, m *
 			if r.o.alreadyPersisted {
 				m.R.ReverseCreatedBies = append(m.R.ReverseCreatedBies, r.o.Build())
 			} else {
-				rel2, err := r.o.CreateMany(ctx, exec, r.number)
+				rel3, err := r.o.CreateMany(ctx, exec, r.number)
 				if err != nil {
 					return err
 				}
 
-				err = m.AttachReverseCreatedBies(ctx, exec, rel2...)
+				err = m.AttachReverseCreatedBies(ctx, exec, rel3...)
 				if err != nil {
 					return err
 				}
@@ -393,12 +431,12 @@ func (o *UserTemplate) insertOptRels(ctx context.Context, exec bob.Executor, m *
 		if o.r.DeletedBy.o.alreadyPersisted {
 			m.R.DeletedBy = o.r.DeletedBy.o.Build()
 		} else {
-			var rel3 *models.User
-			rel3, err = o.r.DeletedBy.o.Create(ctx, exec)
+			var rel4 *models.User
+			rel4, err = o.r.DeletedBy.o.Create(ctx, exec)
 			if err != nil {
 				return err
 			}
-			err = m.AttachDeletedBy(ctx, exec, rel3)
+			err = m.AttachDeletedBy(ctx, exec, rel4)
 			if err != nil {
 				return err
 			}
@@ -413,12 +451,12 @@ func (o *UserTemplate) insertOptRels(ctx context.Context, exec bob.Executor, m *
 			if r.o.alreadyPersisted {
 				m.R.ReverseDeletedBies = append(m.R.ReverseDeletedBies, r.o.Build())
 			} else {
-				rel4, err := r.o.CreateMany(ctx, exec, r.number)
+				rel5, err := r.o.CreateMany(ctx, exec, r.number)
 				if err != nil {
 					return err
 				}
 
-				err = m.AttachReverseDeletedBies(ctx, exec, rel4...)
+				err = m.AttachReverseDeletedBies(ctx, exec, rel5...)
 				if err != nil {
 					return err
 				}
@@ -433,12 +471,12 @@ func (o *UserTemplate) insertOptRels(ctx context.Context, exec bob.Executor, m *
 			if r.o.alreadyPersisted {
 				m.R.ReverseUpdatedBies = append(m.R.ReverseUpdatedBies, r.o.Build())
 			} else {
-				rel6, err := r.o.CreateMany(ctx, exec, r.number)
+				rel7, err := r.o.CreateMany(ctx, exec, r.number)
 				if err != nil {
 					return err
 				}
 
-				err = m.AttachReverseUpdatedBies(ctx, exec, rel6...)
+				err = m.AttachReverseUpdatedBies(ctx, exec, rel7...)
 				if err != nil {
 					return err
 				}
@@ -460,43 +498,43 @@ func (o *UserTemplate) Create(ctx context.Context, exec bob.Executor) (*models.U
 		UserMods.WithNewCreatedBy().Apply(ctx, o)
 	}
 
-	var rel1 *models.User
+	var rel2 *models.User
 
 	if o.r.CreatedBy.o.alreadyPersisted {
-		rel1 = o.r.CreatedBy.o.Build()
+		rel2 = o.r.CreatedBy.o.Build()
 	} else {
-		rel1, err = o.r.CreatedBy.o.Create(ctx, exec)
+		rel2, err = o.r.CreatedBy.o.Create(ctx, exec)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	opt.CreatedBy = omit.From(rel1.ID)
+	opt.CreatedBy = omit.From(rel2.ID)
 
 	if o.r.UpdatedBy == nil {
 		UserMods.WithNewUpdatedBy().Apply(ctx, o)
 	}
 
-	var rel5 *models.User
+	var rel6 *models.User
 
 	if o.r.UpdatedBy.o.alreadyPersisted {
-		rel5 = o.r.UpdatedBy.o.Build()
+		rel6 = o.r.UpdatedBy.o.Build()
 	} else {
-		rel5, err = o.r.UpdatedBy.o.Create(ctx, exec)
+		rel6, err = o.r.UpdatedBy.o.Create(ctx, exec)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	opt.UpdatedBy = omit.From(rel5.ID)
+	opt.UpdatedBy = omit.From(rel6.ID)
 
 	m, err := models.Users.Insert(opt).One(ctx, exec)
 	if err != nil {
 		return nil, err
 	}
 
-	m.R.CreatedBy = rel1
-	m.R.UpdatedBy = rel5
+	m.R.CreatedBy = rel2
+	m.R.UpdatedBy = rel6
 
 	if err := o.insertOptRels(ctx, exec, m); err != nil {
 		return nil, err
@@ -1367,6 +1405,54 @@ func (m userMods) WithExistingUpdatedBy(em *models.User) UserMod {
 func (m userMods) WithoutUpdatedBy() UserMod {
 	return UserModFunc(func(ctx context.Context, o *UserTemplate) {
 		o.r.UpdatedBy = nil
+	})
+}
+
+func (m userMods) WithPasswordResetOtps(number int, related *PasswordResetOtpTemplate) UserMod {
+	return UserModFunc(func(ctx context.Context, o *UserTemplate) {
+		o.r.PasswordResetOtps = []*userRPasswordResetOtpsR{{
+			number: number,
+			o:      related,
+		}}
+	})
+}
+
+func (m userMods) WithNewPasswordResetOtps(number int, mods ...PasswordResetOtpMod) UserMod {
+	return UserModFunc(func(ctx context.Context, o *UserTemplate) {
+		related := o.f.NewPasswordResetOtpWithContext(ctx, mods...)
+		m.WithPasswordResetOtps(number, related).Apply(ctx, o)
+	})
+}
+
+func (m userMods) AddPasswordResetOtps(number int, related *PasswordResetOtpTemplate) UserMod {
+	return UserModFunc(func(ctx context.Context, o *UserTemplate) {
+		o.r.PasswordResetOtps = append(o.r.PasswordResetOtps, &userRPasswordResetOtpsR{
+			number: number,
+			o:      related,
+		})
+	})
+}
+
+func (m userMods) AddNewPasswordResetOtps(number int, mods ...PasswordResetOtpMod) UserMod {
+	return UserModFunc(func(ctx context.Context, o *UserTemplate) {
+		related := o.f.NewPasswordResetOtpWithContext(ctx, mods...)
+		m.AddPasswordResetOtps(number, related).Apply(ctx, o)
+	})
+}
+
+func (m userMods) AddExistingPasswordResetOtps(existingModels ...*models.PasswordResetOtp) UserMod {
+	return UserModFunc(func(ctx context.Context, o *UserTemplate) {
+		for _, em := range existingModels {
+			o.r.PasswordResetOtps = append(o.r.PasswordResetOtps, &userRPasswordResetOtpsR{
+				o: o.f.FromExistingPasswordResetOtp(em),
+			})
+		}
+	})
+}
+
+func (m userMods) WithoutPasswordResetOtps() UserMod {
+	return UserModFunc(func(ctx context.Context, o *UserTemplate) {
+		o.r.PasswordResetOtps = nil
 	})
 }
 
