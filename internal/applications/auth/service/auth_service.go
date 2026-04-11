@@ -19,4 +19,6 @@ type AuthService interface {
 	RevokeSession(ctx context.Context, userID int64, sessionID int64) error
 	UpdateProfile(ctx context.Context, userID int64, req *dto.UpdateProfileRequest) (*dto.UserResponse, error)
 	UpdatePassword(ctx context.Context, userID int64, req *dto.UpdatePasswordRequest) error
+	ForgotPassword(ctx context.Context, email string) error
+	ResetPassword(ctx context.Context, req *dto.ResetPasswordRequest) error
 }

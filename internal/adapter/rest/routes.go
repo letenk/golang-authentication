@@ -9,6 +9,7 @@ import (
 	"github.com/letenk/golang-authentication/internal/applications/auth"
 	authController "github.com/letenk/golang-authentication/internal/applications/auth/controller"
 	authenticationService "github.com/letenk/golang-authentication/internal/applications/authentication/service"
+	emailSvc "github.com/letenk/golang-authentication/internal/applications/email/service"
 	userController "github.com/letenk/golang-authentication/internal/applications/user/controller"
 	authentication "github.com/letenk/golang-authentication/middleware/authentication"
 )
@@ -20,7 +21,11 @@ func SetupRouteHandler(e *echo.Echo, db *database.BobDB, jwtConfig *jwt_config.J
 	authSvc := authenticationService.NewAuthenticationService(jwtConfig)
 	authMiddleware := authentication.NewAuthenticationMiddleware(authSvc)
 
-	authService := auth.InitializeAuthService(db, jwtConfig)
+	cfg := credential.Config
+	smtpCfg := cfg.Email.SMTP
+	emailService := emailSvc.NewSMTPEmailService(smtpCfg.Host, smtpCfg.Port, smtpCfg.Username, smtpCfg.Password, smtpCfg.From)
+
+	authService := auth.InitializeAuthService(db, jwtConfig, emailService, &cfg.Auth.OTP)
 	authCtrl := authController.NewAuthController(authService)
 	userCtrl := userController.NewUserController(authService)
 

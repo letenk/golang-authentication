@@ -8,6 +8,7 @@ import (
 	"github.com/aarondl/opt/omitnull"
 	"github.com/letenk/golang-authentication/bob/models"
 	"github.com/letenk/golang-authentication/configs/database"
+	"github.com/stephenafamo/bob"
 )
 
 
@@ -91,6 +92,22 @@ func (r *UserRepositoryImpl) UpdateByID(ctx context.Context, id int64, setter *m
 	}
 
 	return user, nil
+}
+
+func (r *UserRepositoryImpl) UpdatePasswordWithExec(ctx context.Context, exec bob.Executor, userID int64, hashedPassword string) error {
+	setter := &models.UserSetter{
+		Password:  omit.From(hashedPassword),
+		UpdatedAt: omitnull.From(time.Now().UTC()),
+		UpdatedBy: omit.From(userID),
+	}
+
+	_, err := models.Users.Update(
+		models.UpdateWhere.Users.ID.EQ(userID),
+		models.UpdateWhere.Users.DeletedAt.IsNull(),
+		setter.UpdateMod(),
+	).One(ctx, exec)
+
+	return err
 }
 
 func (r *UserRepositoryImpl) SoftDeleteByID(ctx context.Context, id int64, deletedBy int64) error {
