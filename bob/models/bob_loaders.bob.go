@@ -17,16 +17,18 @@ import (
 var Preload = getPreloaders()
 
 type preloaders struct {
-	PasswordResetOtp passwordResetOtpPreloader
-	RefreshToken     refreshTokenPreloader
-	User             userPreloader
+	EmailVerificationOtp emailVerificationOtpPreloader
+	PasswordResetOtp     passwordResetOtpPreloader
+	RefreshToken         refreshTokenPreloader
+	User                 userPreloader
 }
 
 func getPreloaders() preloaders {
 	return preloaders{
-		PasswordResetOtp: buildPasswordResetOtpPreloader(),
-		RefreshToken:     buildRefreshTokenPreloader(),
-		User:             buildUserPreloader(),
+		EmailVerificationOtp: buildEmailVerificationOtpPreloader(),
+		PasswordResetOtp:     buildPasswordResetOtpPreloader(),
+		RefreshToken:         buildRefreshTokenPreloader(),
+		User:                 buildUserPreloader(),
 	}
 }
 
@@ -37,16 +39,18 @@ var (
 )
 
 type thenLoaders[Q orm.Loadable] struct {
-	PasswordResetOtp passwordResetOtpThenLoader[Q]
-	RefreshToken     refreshTokenThenLoader[Q]
-	User             userThenLoader[Q]
+	EmailVerificationOtp emailVerificationOtpThenLoader[Q]
+	PasswordResetOtp     passwordResetOtpThenLoader[Q]
+	RefreshToken         refreshTokenThenLoader[Q]
+	User                 userThenLoader[Q]
 }
 
 func getThenLoaders[Q orm.Loadable]() thenLoaders[Q] {
 	return thenLoaders[Q]{
-		PasswordResetOtp: buildPasswordResetOtpThenLoader[Q](),
-		RefreshToken:     buildRefreshTokenThenLoader[Q](),
-		User:             buildUserThenLoader[Q](),
+		EmailVerificationOtp: buildEmailVerificationOtpThenLoader[Q](),
+		PasswordResetOtp:     buildPasswordResetOtpThenLoader[Q](),
+		RefreshToken:         buildRefreshTokenThenLoader[Q](),
+		User:                 buildUserThenLoader[Q](),
 	}
 }
 

@@ -8,6 +8,10 @@ import "context"
 type contextKey string
 
 var (
+	// Relationship Contexts for email_verification_otps
+	emailVerificationOtpWithParentsCascadingCtx = newContextual[bool]("emailVerificationOtpWithParentsCascading")
+	emailVerificationOtpRelUserCtx              = newContextual[bool]("email_verification_otps.users.email_verification_otps.email_verification_otps_user_id_fkey")
+
 	// Relationship Contexts for goose_db_version
 	gooseDBVersionWithParentsCascadingCtx = newContextual[bool]("gooseDBVersionWithParentsCascading")
 
@@ -20,15 +24,16 @@ var (
 	refreshTokenRelUserCtx              = newContextual[bool]("refresh_tokens.users.refresh_tokens.refresh_tokens_user_id_fkey")
 
 	// Relationship Contexts for users
-	userWithParentsCascadingCtx  = newContextual[bool]("userWithParentsCascading")
-	userRelPasswordResetOtpsCtx  = newContextual[bool]("password_reset_otps.users.password_reset_otps.password_reset_otps_user_id_fkey")
-	userRelRefreshTokensCtx      = newContextual[bool]("refresh_tokens.users.refresh_tokens.refresh_tokens_user_id_fkey")
-	userRelCreatedByCtx          = newContextual[bool]("users.users.users.fk_users_created_by")
-	userRelReverseCreatedBiesCtx = newContextual[bool]("users.users.users.fk_users_created_by")
-	userRelDeletedByCtx          = newContextual[bool]("users.users.users.fk_users_deleted_by")
-	userRelReverseDeletedBiesCtx = newContextual[bool]("users.users.users.fk_users_deleted_by")
-	userRelUpdatedByCtx          = newContextual[bool]("users.users.users.fk_users_updated_by")
-	userRelReverseUpdatedBiesCtx = newContextual[bool]("users.users.users.fk_users_updated_by")
+	userWithParentsCascadingCtx     = newContextual[bool]("userWithParentsCascading")
+	userRelEmailVerificationOtpsCtx = newContextual[bool]("email_verification_otps.users.email_verification_otps.email_verification_otps_user_id_fkey")
+	userRelPasswordResetOtpsCtx     = newContextual[bool]("password_reset_otps.users.password_reset_otps.password_reset_otps_user_id_fkey")
+	userRelRefreshTokensCtx         = newContextual[bool]("refresh_tokens.users.refresh_tokens.refresh_tokens_user_id_fkey")
+	userRelCreatedByCtx             = newContextual[bool]("users.users.users.fk_users_created_by")
+	userRelReverseCreatedBiesCtx    = newContextual[bool]("users.users.users.fk_users_created_by")
+	userRelDeletedByCtx             = newContextual[bool]("users.users.users.fk_users_deleted_by")
+	userRelReverseDeletedBiesCtx    = newContextual[bool]("users.users.users.fk_users_deleted_by")
+	userRelUpdatedByCtx             = newContextual[bool]("users.users.users.fk_users_updated_by")
+	userRelReverseUpdatedBiesCtx    = newContextual[bool]("users.users.users.fk_users_updated_by")
 )
 
 // Contextual is a convienience wrapper around context.WithValue and context.Value

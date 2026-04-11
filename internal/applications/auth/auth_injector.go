@@ -11,6 +11,7 @@ import (
 	"github.com/letenk/golang-authentication/configs/jwt_config"
 	authService "github.com/letenk/golang-authentication/internal/applications/auth/service"
 	emailSvc "github.com/letenk/golang-authentication/internal/applications/email/service"
+	emailVerificationRepo "github.com/letenk/golang-authentication/internal/applications/email_verification/repository/db"
 	otpRepo "github.com/letenk/golang-authentication/internal/applications/password_reset/repository/db"
 	tokenRepo "github.com/letenk/golang-authentication/internal/applications/refresh_token/repository/db"
 	"github.com/letenk/golang-authentication/internal/applications/transaction"
@@ -26,6 +27,9 @@ var providerSetAuth = wire.NewSet(
 
 	otpRepo.NewPasswordResetOTPRepository,
 	wire.Bind(new(otpRepo.PasswordResetOTPRepository), new(*otpRepo.PasswordResetOTPRepositoryImpl)),
+
+	emailVerificationRepo.NewEmailVerificationOTPRepository,
+	wire.Bind(new(emailVerificationRepo.EmailVerificationOTPRepository), new(*emailVerificationRepo.EmailVerificationOTPRepositoryImpl)),
 
 	transaction.NewTrxService,
 

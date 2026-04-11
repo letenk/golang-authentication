@@ -60,16 +60,21 @@ type UserTemplate struct {
 }
 
 type userR struct {
-	PasswordResetOtps  []*userRPasswordResetOtpsR
-	RefreshTokens      []*userRRefreshTokensR
-	CreatedBy          *userRCreatedByR
-	ReverseCreatedBies []*userRReverseCreatedBiesR
-	DeletedBy          *userRDeletedByR
-	ReverseDeletedBies []*userRReverseDeletedBiesR
-	UpdatedBy          *userRUpdatedByR
-	ReverseUpdatedBies []*userRReverseUpdatedBiesR
+	EmailVerificationOtps []*userREmailVerificationOtpsR
+	PasswordResetOtps     []*userRPasswordResetOtpsR
+	RefreshTokens         []*userRRefreshTokensR
+	CreatedBy             *userRCreatedByR
+	ReverseCreatedBies    []*userRReverseCreatedBiesR
+	DeletedBy             *userRDeletedByR
+	ReverseDeletedBies    []*userRReverseDeletedBiesR
+	UpdatedBy             *userRUpdatedByR
+	ReverseUpdatedBies    []*userRReverseUpdatedBiesR
 }
 
+type userREmailVerificationOtpsR struct {
+	number int
+	o      *EmailVerificationOtpTemplate
+}
 type userRPasswordResetOtpsR struct {
 	number int
 	o      *PasswordResetOtpTemplate
@@ -110,6 +115,19 @@ func (o *UserTemplate) Apply(ctx context.Context, mods ...UserMod) {
 // setModelRels creates and sets the relationships on *models.User
 // according to the relationships in the template. Nothing is inserted into the db
 func (t UserTemplate) setModelRels(o *models.User) {
+	if t.r.EmailVerificationOtps != nil {
+		rel := models.EmailVerificationOtpSlice{}
+		for _, r := range t.r.EmailVerificationOtps {
+			related := r.o.BuildMany(r.number)
+			for _, rel := range related {
+				rel.UserID = o.ID // h2
+				rel.R.User = o
+			}
+			rel = append(rel, related...)
+		}
+		o.R.EmailVerificationOtps = rel
+	}
+
 	if t.r.PasswordResetOtps != nil {
 		rel := models.PasswordResetOtpSlice{}
 		for _, r := range t.r.PasswordResetOtps {
@@ -365,6 +383,26 @@ func ensureCreatableUser(m *models.UserSetter) {
 func (o *UserTemplate) insertOptRels(ctx context.Context, exec bob.Executor, m *models.User) error {
 	var err error
 
+	isEmailVerificationOtpsDone, _ := userRelEmailVerificationOtpsCtx.Value(ctx)
+	if !isEmailVerificationOtpsDone && o.r.EmailVerificationOtps != nil {
+		ctx = userRelEmailVerificationOtpsCtx.WithValue(ctx, true)
+		for _, r := range o.r.EmailVerificationOtps {
+			if r.o.alreadyPersisted {
+				m.R.EmailVerificationOtps = append(m.R.EmailVerificationOtps, r.o.Build())
+			} else {
+				rel0, err := r.o.CreateMany(ctx, exec, r.number)
+				if err != nil {
+					return err
+				}
+
+				err = m.AttachEmailVerificationOtps(ctx, exec, rel0...)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
 	isPasswordResetOtpsDone, _ := userRelPasswordResetOtpsCtx.Value(ctx)
 	if !isPasswordResetOtpsDone && o.r.PasswordResetOtps != nil {
 		ctx = userRelPasswordResetOtpsCtx.WithValue(ctx, true)
@@ -372,12 +410,12 @@ func (o *UserTemplate) insertOptRels(ctx context.Context, exec bob.Executor, m *
 			if r.o.alreadyPersisted {
 				m.R.PasswordResetOtps = append(m.R.PasswordResetOtps, r.o.Build())
 			} else {
-				rel0, err := r.o.CreateMany(ctx, exec, r.number)
+				rel1, err := r.o.CreateMany(ctx, exec, r.number)
 				if err != nil {
 					return err
 				}
 
-				err = m.AttachPasswordResetOtps(ctx, exec, rel0...)
+				err = m.AttachPasswordResetOtps(ctx, exec, rel1...)
 				if err != nil {
 					return err
 				}
@@ -392,12 +430,12 @@ func (o *UserTemplate) insertOptRels(ctx context.Context, exec bob.Executor, m *
 			if r.o.alreadyPersisted {
 				m.R.RefreshTokens = append(m.R.RefreshTokens, r.o.Build())
 			} else {
-				rel1, err := r.o.CreateMany(ctx, exec, r.number)
+				rel2, err := r.o.CreateMany(ctx, exec, r.number)
 				if err != nil {
 					return err
 				}
 
-				err = m.AttachRefreshTokens(ctx, exec, rel1...)
+				err = m.AttachRefreshTokens(ctx, exec, rel2...)
 				if err != nil {
 					return err
 				}
@@ -412,12 +450,12 @@ func (o *UserTemplate) insertOptRels(ctx context.Context, exec bob.Executor, m *
 			if r.o.alreadyPersisted {
 				m.R.ReverseCreatedBies = append(m.R.ReverseCreatedBies, r.o.Build())
 			} else {
-				rel3, err := r.o.CreateMany(ctx, exec, r.number)
+				rel4, err := r.o.CreateMany(ctx, exec, r.number)
 				if err != nil {
 					return err
 				}
 
-				err = m.AttachReverseCreatedBies(ctx, exec, rel3...)
+				err = m.AttachReverseCreatedBies(ctx, exec, rel4...)
 				if err != nil {
 					return err
 				}
@@ -431,12 +469,12 @@ func (o *UserTemplate) insertOptRels(ctx context.Context, exec bob.Executor, m *
 		if o.r.DeletedBy.o.alreadyPersisted {
 			m.R.DeletedBy = o.r.DeletedBy.o.Build()
 		} else {
-			var rel4 *models.User
-			rel4, err = o.r.DeletedBy.o.Create(ctx, exec)
+			var rel5 *models.User
+			rel5, err = o.r.DeletedBy.o.Create(ctx, exec)
 			if err != nil {
 				return err
 			}
-			err = m.AttachDeletedBy(ctx, exec, rel4)
+			err = m.AttachDeletedBy(ctx, exec, rel5)
 			if err != nil {
 				return err
 			}
@@ -451,12 +489,12 @@ func (o *UserTemplate) insertOptRels(ctx context.Context, exec bob.Executor, m *
 			if r.o.alreadyPersisted {
 				m.R.ReverseDeletedBies = append(m.R.ReverseDeletedBies, r.o.Build())
 			} else {
-				rel5, err := r.o.CreateMany(ctx, exec, r.number)
+				rel6, err := r.o.CreateMany(ctx, exec, r.number)
 				if err != nil {
 					return err
 				}
 
-				err = m.AttachReverseDeletedBies(ctx, exec, rel5...)
+				err = m.AttachReverseDeletedBies(ctx, exec, rel6...)
 				if err != nil {
 					return err
 				}
@@ -471,12 +509,12 @@ func (o *UserTemplate) insertOptRels(ctx context.Context, exec bob.Executor, m *
 			if r.o.alreadyPersisted {
 				m.R.ReverseUpdatedBies = append(m.R.ReverseUpdatedBies, r.o.Build())
 			} else {
-				rel7, err := r.o.CreateMany(ctx, exec, r.number)
+				rel8, err := r.o.CreateMany(ctx, exec, r.number)
 				if err != nil {
 					return err
 				}
 
-				err = m.AttachReverseUpdatedBies(ctx, exec, rel7...)
+				err = m.AttachReverseUpdatedBies(ctx, exec, rel8...)
 				if err != nil {
 					return err
 				}
@@ -498,43 +536,43 @@ func (o *UserTemplate) Create(ctx context.Context, exec bob.Executor) (*models.U
 		UserMods.WithNewCreatedBy().Apply(ctx, o)
 	}
 
-	var rel2 *models.User
+	var rel3 *models.User
 
 	if o.r.CreatedBy.o.alreadyPersisted {
-		rel2 = o.r.CreatedBy.o.Build()
+		rel3 = o.r.CreatedBy.o.Build()
 	} else {
-		rel2, err = o.r.CreatedBy.o.Create(ctx, exec)
+		rel3, err = o.r.CreatedBy.o.Create(ctx, exec)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	opt.CreatedBy = omit.From(rel2.ID)
+	opt.CreatedBy = omit.From(rel3.ID)
 
 	if o.r.UpdatedBy == nil {
 		UserMods.WithNewUpdatedBy().Apply(ctx, o)
 	}
 
-	var rel6 *models.User
+	var rel7 *models.User
 
 	if o.r.UpdatedBy.o.alreadyPersisted {
-		rel6 = o.r.UpdatedBy.o.Build()
+		rel7 = o.r.UpdatedBy.o.Build()
 	} else {
-		rel6, err = o.r.UpdatedBy.o.Create(ctx, exec)
+		rel7, err = o.r.UpdatedBy.o.Create(ctx, exec)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	opt.UpdatedBy = omit.From(rel6.ID)
+	opt.UpdatedBy = omit.From(rel7.ID)
 
 	m, err := models.Users.Insert(opt).One(ctx, exec)
 	if err != nil {
 		return nil, err
 	}
 
-	m.R.CreatedBy = rel2
-	m.R.UpdatedBy = rel6
+	m.R.CreatedBy = rel3
+	m.R.UpdatedBy = rel7
 
 	if err := o.insertOptRels(ctx, exec, m); err != nil {
 		return nil, err
@@ -1405,6 +1443,54 @@ func (m userMods) WithExistingUpdatedBy(em *models.User) UserMod {
 func (m userMods) WithoutUpdatedBy() UserMod {
 	return UserModFunc(func(ctx context.Context, o *UserTemplate) {
 		o.r.UpdatedBy = nil
+	})
+}
+
+func (m userMods) WithEmailVerificationOtps(number int, related *EmailVerificationOtpTemplate) UserMod {
+	return UserModFunc(func(ctx context.Context, o *UserTemplate) {
+		o.r.EmailVerificationOtps = []*userREmailVerificationOtpsR{{
+			number: number,
+			o:      related,
+		}}
+	})
+}
+
+func (m userMods) WithNewEmailVerificationOtps(number int, mods ...EmailVerificationOtpMod) UserMod {
+	return UserModFunc(func(ctx context.Context, o *UserTemplate) {
+		related := o.f.NewEmailVerificationOtpWithContext(ctx, mods...)
+		m.WithEmailVerificationOtps(number, related).Apply(ctx, o)
+	})
+}
+
+func (m userMods) AddEmailVerificationOtps(number int, related *EmailVerificationOtpTemplate) UserMod {
+	return UserModFunc(func(ctx context.Context, o *UserTemplate) {
+		o.r.EmailVerificationOtps = append(o.r.EmailVerificationOtps, &userREmailVerificationOtpsR{
+			number: number,
+			o:      related,
+		})
+	})
+}
+
+func (m userMods) AddNewEmailVerificationOtps(number int, mods ...EmailVerificationOtpMod) UserMod {
+	return UserModFunc(func(ctx context.Context, o *UserTemplate) {
+		related := o.f.NewEmailVerificationOtpWithContext(ctx, mods...)
+		m.AddEmailVerificationOtps(number, related).Apply(ctx, o)
+	})
+}
+
+func (m userMods) AddExistingEmailVerificationOtps(existingModels ...*models.EmailVerificationOtp) UserMod {
+	return UserModFunc(func(ctx context.Context, o *UserTemplate) {
+		for _, em := range existingModels {
+			o.r.EmailVerificationOtps = append(o.r.EmailVerificationOtps, &userREmailVerificationOtpsR{
+				o: o.f.FromExistingEmailVerificationOtp(em),
+			})
+		}
+	})
+}
+
+func (m userMods) WithoutEmailVerificationOtps() UserMod {
+	return UserModFunc(func(ctx context.Context, o *UserTemplate) {
+		o.r.EmailVerificationOtps = nil
 	})
 }
 

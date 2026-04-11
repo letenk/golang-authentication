@@ -21,4 +21,6 @@ type AuthService interface {
 	UpdatePassword(ctx context.Context, userID int64, req *dto.UpdatePasswordRequest) error
 	ForgotPassword(ctx context.Context, email string) error
 	ResetPassword(ctx context.Context, req *dto.ResetPasswordRequest) error
+	SendVerificationEmail(ctx context.Context, userID int64) error
+	VerifyEmail(ctx context.Context, userID int64, code string) error
 }

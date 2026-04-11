@@ -32,9 +32,10 @@ func (j joinSet[Q]) AliasedAs(alias string) joinSet[Q] {
 }
 
 type joins[Q dialect.Joinable] struct {
-	PasswordResetOtps joinSet[passwordResetOtpJoins[Q]]
-	RefreshTokens     joinSet[refreshTokenJoins[Q]]
-	Users             joinSet[userJoins[Q]]
+	EmailVerificationOtps joinSet[emailVerificationOtpJoins[Q]]
+	PasswordResetOtps     joinSet[passwordResetOtpJoins[Q]]
+	RefreshTokens         joinSet[refreshTokenJoins[Q]]
+	Users                 joinSet[userJoins[Q]]
 }
 
 func buildJoinSet[Q interface{ aliasedAs(string) Q }, C any, F func(C, string) Q](c C, f F) joinSet[Q] {
@@ -47,9 +48,10 @@ func buildJoinSet[Q interface{ aliasedAs(string) Q }, C any, F func(C, string) Q
 
 func getJoins[Q dialect.Joinable]() joins[Q] {
 	return joins[Q]{
-		PasswordResetOtps: buildJoinSet[passwordResetOtpJoins[Q]](PasswordResetOtps.Columns, buildPasswordResetOtpJoins),
-		RefreshTokens:     buildJoinSet[refreshTokenJoins[Q]](RefreshTokens.Columns, buildRefreshTokenJoins),
-		Users:             buildJoinSet[userJoins[Q]](Users.Columns, buildUserJoins),
+		EmailVerificationOtps: buildJoinSet[emailVerificationOtpJoins[Q]](EmailVerificationOtps.Columns, buildEmailVerificationOtpJoins),
+		PasswordResetOtps:     buildJoinSet[passwordResetOtpJoins[Q]](PasswordResetOtps.Columns, buildPasswordResetOtpJoins),
+		RefreshTokens:         buildJoinSet[refreshTokenJoins[Q]](RefreshTokens.Columns, buildRefreshTokenJoins),
+		Users:                 buildJoinSet[userJoins[Q]](Users.Columns, buildUserJoins),
 	}
 }
 
