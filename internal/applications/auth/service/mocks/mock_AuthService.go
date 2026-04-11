@@ -415,6 +415,113 @@ func (_c *MockAuthService_Register_Call) RunAndReturn(run func(context.Context, 
 	return _c
 }
 
+// GetSessions provides a mock function with given fields: ctx, userID
+func (_m *MockAuthService) GetSessions(ctx context.Context, userID int64) ([]*dto.ActiveSessionResponse, error) {
+	ret := _m.Called(ctx, userID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetSessions")
+	}
+
+	var r0 []*dto.ActiveSessionResponse
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, int64) ([]*dto.ActiveSessionResponse, error)); ok {
+		return rf(ctx, userID)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, int64) []*dto.ActiveSessionResponse); ok {
+		r0 = rf(ctx, userID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*dto.ActiveSessionResponse)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, int64) error); ok {
+		r1 = rf(ctx, userID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockAuthService_GetSessions_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetSessions'
+type MockAuthService_GetSessions_Call struct {
+	*mock.Call
+}
+
+// GetSessions is a helper method to define mock.On call
+//   - ctx context.Context
+//   - userID int64
+func (_e *MockAuthService_Expecter) GetSessions(ctx interface{}, userID interface{}) *MockAuthService_GetSessions_Call {
+	return &MockAuthService_GetSessions_Call{Call: _e.mock.On("GetSessions", ctx, userID)}
+}
+
+func (_c *MockAuthService_GetSessions_Call) Run(run func(ctx context.Context, userID int64)) *MockAuthService_GetSessions_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(int64))
+	})
+	return _c
+}
+
+func (_c *MockAuthService_GetSessions_Call) Return(_a0 []*dto.ActiveSessionResponse, _a1 error) *MockAuthService_GetSessions_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockAuthService_GetSessions_Call) RunAndReturn(run func(context.Context, int64) ([]*dto.ActiveSessionResponse, error)) *MockAuthService_GetSessions_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// RevokeSession provides a mock function with given fields: ctx, userID, sessionID
+func (_m *MockAuthService) RevokeSession(ctx context.Context, userID int64, sessionID int64) error {
+	ret := _m.Called(ctx, userID, sessionID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for RevokeSession")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, int64, int64) error); ok {
+		r0 = rf(ctx, userID, sessionID)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockAuthService_RevokeSession_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RevokeSession'
+type MockAuthService_RevokeSession_Call struct {
+	*mock.Call
+}
+
+// RevokeSession is a helper method to define mock.On call
+//   - ctx context.Context
+//   - userID int64
+//   - sessionID int64
+func (_e *MockAuthService_Expecter) RevokeSession(ctx interface{}, userID interface{}, sessionID interface{}) *MockAuthService_RevokeSession_Call {
+	return &MockAuthService_RevokeSession_Call{Call: _e.mock.On("RevokeSession", ctx, userID, sessionID)}
+}
+
+func (_c *MockAuthService_RevokeSession_Call) Run(run func(ctx context.Context, userID int64, sessionID int64)) *MockAuthService_RevokeSession_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(int64), args[2].(int64))
+	})
+	return _c
+}
+
+func (_c *MockAuthService_RevokeSession_Call) Return(_a0 error) *MockAuthService_RevokeSession_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockAuthService_RevokeSession_Call) RunAndReturn(run func(context.Context, int64, int64) error) *MockAuthService_RevokeSession_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // NewMockAuthService creates a new instance of MockAuthService. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewMockAuthService(t interface {

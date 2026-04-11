@@ -9,6 +9,7 @@ import (
 	"github.com/letenk/golang-authentication/internal/applications/auth"
 	authController "github.com/letenk/golang-authentication/internal/applications/auth/controller"
 	authenticationService "github.com/letenk/golang-authentication/internal/applications/authentication/service"
+	userController "github.com/letenk/golang-authentication/internal/applications/user/controller"
 	authentication "github.com/letenk/golang-authentication/middleware/authentication"
 )
 
@@ -21,9 +22,11 @@ func SetupRouteHandler(e *echo.Echo, db *database.BobDB, jwtConfig *jwt_config.J
 
 	authService := auth.InitializeAuthService(db, jwtConfig)
 	authCtrl := authController.NewAuthController(authService)
+	userCtrl := userController.NewUserController(authService)
 
 	// Setup routes with middleware
 	authCtrl.AddRoutes(e, authMiddleware)
+	userCtrl.AddRoutes(e, authMiddleware)
 
 	// API v1 group
 	v1 := e.Group("/api/v1")

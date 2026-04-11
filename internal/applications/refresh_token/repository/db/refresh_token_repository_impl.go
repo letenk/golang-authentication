@@ -102,6 +102,23 @@ func (r *RefreshTokenRepositoryImpl) ReplaceToken(ctx context.Context, oldToken,
 	return err
 }
 
+func (r *RefreshTokenRepositoryImpl) RevokeByIDForUser(ctx context.Context, sessionID int64, userID int64) error {
+	now := time.Now().UTC()
+
+	setter := &models.RefreshTokenSetter{
+		RevokedAt: omitnull.From(now),
+	}
+
+	_, err := models.RefreshTokens.Update(
+		models.UpdateWhere.RefreshTokens.ID.EQ(sessionID),
+		models.UpdateWhere.RefreshTokens.UserID.EQ(userID),
+		models.UpdateWhere.RefreshTokens.RevokedAt.IsNull(),
+		setter.UpdateMod(),
+	).One(ctx, r.db.Exec)
+
+	return err
+}
+
 func (r *RefreshTokenRepositoryImpl) RevokeAllByUserID(ctx context.Context, userID int64) (int, error) {
 	now := time.Now().UTC()
 
