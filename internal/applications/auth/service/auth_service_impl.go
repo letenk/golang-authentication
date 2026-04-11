@@ -16,6 +16,7 @@ import (
 	refreshTokenRepo "github.com/letenk/golang-authentication/internal/applications/refresh_token/repository/db"
 	userRepo "github.com/letenk/golang-authentication/internal/applications/user/repository/db"
 	emailService "github.com/letenk/golang-authentication/internal/applications/email/service"
+	emailVerificationRepo "github.com/letenk/golang-authentication/internal/applications/email_verification/repository/db"
 	otpRepo "github.com/letenk/golang-authentication/internal/applications/password_reset/repository/db"
 	"github.com/letenk/golang-authentication/internal/applications/transaction"
 	"github.com/letenk/golang-authentication/configs/credential"
@@ -25,13 +26,14 @@ import (
 )
 
 type AuthServiceImpl struct {
-	trxService      transaction.TrxService
-	userRepository  userRepo.UserRepository
-	tokenRepository refreshTokenRepo.RefreshTokenRepository
-	otpRepository   otpRepo.PasswordResetOTPRepository
-	emailService    emailService.EmailService
-	jwtConfig       *jwt_config.JWTConfig
-	otpConfig       *credential.OTPConfig
+	trxService              transaction.TrxService
+	userRepository          userRepo.UserRepository
+	tokenRepository         refreshTokenRepo.RefreshTokenRepository
+	otpRepository           otpRepo.PasswordResetOTPRepository
+	emailVerificationRepo   emailVerificationRepo.EmailVerificationOTPRepository
+	emailService            emailService.EmailService
+	jwtConfig               *jwt_config.JWTConfig
+	otpConfig               *credential.OTPConfig
 }
 
 func NewAuthService(
@@ -39,18 +41,20 @@ func NewAuthService(
 	userRepository userRepo.UserRepository,
 	tokenRepository refreshTokenRepo.RefreshTokenRepository,
 	otpRepository otpRepo.PasswordResetOTPRepository,
+	emailVerificationRepo emailVerificationRepo.EmailVerificationOTPRepository,
 	emailService emailService.EmailService,
 	jwtConfig *jwt_config.JWTConfig,
 	otpConfig *credential.OTPConfig,
 ) *AuthServiceImpl {
 	return &AuthServiceImpl{
-		trxService:      trxService,
-		userRepository:  userRepository,
-		tokenRepository: tokenRepository,
-		otpRepository:   otpRepository,
-		emailService:    emailService,
-		jwtConfig:       jwtConfig,
-		otpConfig:       otpConfig,
+		trxService:            trxService,
+		userRepository:        userRepository,
+		tokenRepository:       tokenRepository,
+		otpRepository:         otpRepository,
+		emailVerificationRepo: emailVerificationRepo,
+		emailService:          emailService,
+		jwtConfig:             jwtConfig,
+		otpConfig:             otpConfig,
 	}
 }
 
@@ -124,6 +128,20 @@ func (service *AuthServiceImpl) Register(ctx context.Context, param *dto.Paramet
 	if err != nil {
 		log.Errorf("failed to register user: %s", err)
 		return nil, exceptions.NewBusinessLogicError(exceptions.BadData, errors.New("failed to register user"), nil)
+	}
+
+	// Send verification email asynchronously after successful registration
+	if param.Email != "" {
+		go func(userID int64) {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Errorf("panic in SendVerificationEmail goroutine: %v", r)
+				}
+			}()
+			if err := service.SendVerificationEmail(context.Background(), userID); err != nil {
+				log.Errorf("failed to send verification email for user %d: %s", userID, err)
+			}
+		}(result.ID)
 	}
 
 	return result, nil
@@ -578,6 +596,112 @@ func (service *AuthServiceImpl) ResetPassword(ctx context.Context, req *dto.Rese
 	if err != nil {
 		log.Errorf("failed to reset password for user %d: %s", user.ID, err)
 		return exceptions.NewBusinessLogicError(exceptions.DataUpdateFailed, errors.New("failed to reset password"), nil)
+	}
+
+	return nil
+}
+
+// SendVerificationEmail generates an OTP and sends a verification email to the user.
+// Email is sent asynchronously via goroutine to avoid blocking the caller.
+func (service *AuthServiceImpl) SendVerificationEmail(ctx context.Context, userID int64) error {
+	user, err := service.userRepository.FindByID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return exceptions.NewBusinessLogicError(exceptions.DataNotFound, errors.New("user not found"), nil)
+		}
+		log.Errorf("failed to find user %d for verification email: %s", userID, err)
+		return exceptions.NewBusinessLogicError(exceptions.DataGetFailed, errors.New("failed to process request"), nil)
+	}
+
+	if !user.Email.IsValue() || user.Email.GetOrZero() == "" {
+		return exceptions.NewBusinessLogicError(exceptions.InvalidArgument, errors.New("user has no email address"), nil)
+	}
+
+	if user.IsVerified.GetOrZero() {
+		return exceptions.NewBusinessLogicError(exceptions.InvalidArgument, errors.New("email is already verified"), nil)
+	}
+
+	otpExpire, err := time.ParseDuration(service.otpConfig.Expire)
+	if err != nil {
+		log.Errorf("failed to parse OTP expire duration: %s", err)
+		return exceptions.NewBusinessLogicError(exceptions.DataCreateFailed, errors.New("failed to process request"), nil)
+	}
+
+	otp, err := utils.GenerateOTP(service.otpConfig.Length)
+	if err != nil {
+		log.Errorf("failed to generate OTP for user %d: %s", userID, err)
+		return exceptions.NewBusinessLogicError(exceptions.DataCreateFailed, errors.New("failed to process request"), nil)
+	}
+
+	expiresAt := time.Now().UTC().Add(otpExpire)
+
+	err = service.trxService.WithTx(ctx, func(tx bob.Executor) error {
+		if err := service.emailVerificationRepo.InvalidatePreviousByUserIDWithExec(ctx, tx, userID); err != nil {
+			return err
+		}
+		_, err := service.emailVerificationRepo.CreateWithExec(ctx, tx, userID, otp, expiresAt)
+		return err
+	})
+	if err != nil {
+		log.Errorf("failed to create verification OTP for user %d: %s", userID, err)
+		return exceptions.NewBusinessLogicError(exceptions.DataCreateFailed, errors.New("failed to process request"), nil)
+	}
+
+	email := user.Email.GetOrZero()
+	name := user.Name.GetOrZero()
+	if name == "" {
+		name = email
+	}
+
+	// Send verification email in background to avoid blocking the response.
+	// Uses an independent context with timeout to prevent hanging, and recover to catch panics.
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Errorf("panic in SendVerificationOTP goroutine: %v", r)
+			}
+		}()
+
+		sendCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = sendCtx
+
+		if err := service.emailService.SendVerificationOTP(email, name, otp); err != nil {
+			log.Errorf("failed to send verification email to %s: %s", email, err)
+		}
+	}()
+
+	return nil
+}
+
+// VerifyEmail validates the OTP and marks the user's email as verified
+func (service *AuthServiceImpl) VerifyEmail(ctx context.Context, userID int64, code string) error {
+	otpRecord, err := service.emailVerificationRepo.FindValidByUserAndCode(ctx, userID, code)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return exceptions.NewBusinessLogicError(exceptions.InvalidArgument, errors.New("invalid or expired OTP"), nil)
+		}
+		log.Errorf("failed to find verification OTP for user %d: %s", userID, err)
+		return exceptions.NewBusinessLogicError(exceptions.DataGetFailed, errors.New("failed to process request"), nil)
+	}
+
+	now := time.Now().UTC()
+
+	err = service.trxService.WithTx(ctx, func(tx bob.Executor) error {
+		if err := service.emailVerificationRepo.MarkUsedWithExec(ctx, tx, otpRecord.ID); err != nil {
+			return err
+		}
+		setter := &models.UserSetter{
+			IsVerified: omitnull.From(true),
+			VerifiedAt: omitnull.From(now),
+			UpdatedBy:  omit.From(userID),
+		}
+		_, err := service.userRepository.UpdateByID(ctx, userID, setter)
+		return err
+	})
+	if err != nil {
+		log.Errorf("failed to verify email for user %d: %s", userID, err)
+		return exceptions.NewBusinessLogicError(exceptions.DataUpdateFailed, errors.New("failed to verify email"), nil)
 	}
 
 	return nil

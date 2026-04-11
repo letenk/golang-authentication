@@ -65,6 +65,50 @@ func (_c *MockEmailService_SendOTP_Call) RunAndReturn(run func(string, string, s
 	return _c
 }
 
+// SendVerificationOTP provides a mock function with given fields: toEmail, toName, otp
+func (_m *MockEmailService) SendVerificationOTP(toEmail string, toName string, otp string) error {
+	ret := _m.Called(toEmail, toName, otp)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SendVerificationOTP")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(string, string, string) error); ok {
+		r0 = rf(toEmail, toName, otp)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockEmailService_SendVerificationOTP_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SendVerificationOTP'
+type MockEmailService_SendVerificationOTP_Call struct {
+	*mock.Call
+}
+
+func (_e *MockEmailService_Expecter) SendVerificationOTP(toEmail interface{}, toName interface{}, otp interface{}) *MockEmailService_SendVerificationOTP_Call {
+	return &MockEmailService_SendVerificationOTP_Call{Call: _e.mock.On("SendVerificationOTP", toEmail, toName, otp)}
+}
+
+func (_c *MockEmailService_SendVerificationOTP_Call) Run(run func(toEmail string, toName string, otp string)) *MockEmailService_SendVerificationOTP_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string), args[1].(string), args[2].(string))
+	})
+	return _c
+}
+
+func (_c *MockEmailService_SendVerificationOTP_Call) Return(_a0 error) *MockEmailService_SendVerificationOTP_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockEmailService_SendVerificationOTP_Call) RunAndReturn(run func(string, string, string) error) *MockEmailService_SendVerificationOTP_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // NewMockEmailService creates a new instance of MockEmailService. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewMockEmailService(t interface {

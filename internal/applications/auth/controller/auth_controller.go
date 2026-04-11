@@ -196,3 +196,34 @@ func (controller *AuthController) ResetPassword(ctx echo.Context) error {
 
 	return response.SuccessWithMessage(ctx, "Password reset successfully", &struct{}{})
 }
+
+func (controller *AuthController) VerifyEmail(ctx echo.Context) error {
+	header, err := utils.GetContextHeaders(ctx, headers.ContextHeaders)
+	if err != nil {
+		return err
+	}
+
+	request := &dto.VerifyEmailRequest{}
+	if err := helper.BindAndValidate(ctx, request); err != nil {
+		return err
+	}
+
+	if err := controller.authService.VerifyEmail(ctx.Request().Context(), header.UserID, request.OTP); err != nil {
+		return err
+	}
+
+	return response.SuccessWithMessage(ctx, "Email verified successfully", &struct{}{})
+}
+
+func (controller *AuthController) ResendVerificationEmail(ctx echo.Context) error {
+	header, err := utils.GetContextHeaders(ctx, headers.ContextHeaders)
+	if err != nil {
+		return err
+	}
+
+	if err := controller.authService.SendVerificationEmail(ctx.Request().Context(), header.UserID); err != nil {
+		return err
+	}
+
+	return response.SuccessWithMessage(ctx, "Verification email sent", &struct{}{})
+}

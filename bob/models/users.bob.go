@@ -57,14 +57,15 @@ type UsersQuery = *psql.ViewQuery[*User, UserSlice]
 
 // userR is where relationships are stored.
 type userR struct {
-	PasswordResetOtps  PasswordResetOtpSlice // password_reset_otps.password_reset_otps_user_id_fkey
-	RefreshTokens      RefreshTokenSlice     // refresh_tokens.refresh_tokens_user_id_fkey
-	CreatedBy          *User                 // users.fk_users_created_by
-	ReverseCreatedBies UserSlice             // users.fk_users_created_by__self_join_reverse
-	DeletedBy          *User                 // users.fk_users_deleted_by
-	ReverseDeletedBies UserSlice             // users.fk_users_deleted_by__self_join_reverse
-	UpdatedBy          *User                 // users.fk_users_updated_by
-	ReverseUpdatedBies UserSlice             // users.fk_users_updated_by__self_join_reverse
+	EmailVerificationOtps EmailVerificationOtpSlice // email_verification_otps.email_verification_otps_user_id_fkey
+	PasswordResetOtps     PasswordResetOtpSlice     // password_reset_otps.password_reset_otps_user_id_fkey
+	RefreshTokens         RefreshTokenSlice         // refresh_tokens.refresh_tokens_user_id_fkey
+	CreatedBy             *User                     // users.fk_users_created_by
+	ReverseCreatedBies    UserSlice                 // users.fk_users_created_by__self_join_reverse
+	DeletedBy             *User                     // users.fk_users_deleted_by
+	ReverseDeletedBies    UserSlice                 // users.fk_users_deleted_by__self_join_reverse
+	UpdatedBy             *User                     // users.fk_users_updated_by
+	ReverseUpdatedBies    UserSlice                 // users.fk_users_updated_by__self_join_reverse
 }
 
 func buildUserColumns(alias string) userColumns {
@@ -677,6 +678,30 @@ func (o UserSlice) ReloadAll(ctx context.Context, exec bob.Executor) error {
 	return nil
 }
 
+// EmailVerificationOtps starts a query for related objects on email_verification_otps
+func (o *User) EmailVerificationOtps(mods ...bob.Mod[*dialect.SelectQuery]) EmailVerificationOtpsQuery {
+	return EmailVerificationOtps.Query(append(mods,
+		sm.Where(EmailVerificationOtps.Columns.UserID.EQ(psql.Arg(o.ID))),
+	)...)
+}
+
+func (os UserSlice) EmailVerificationOtps(mods ...bob.Mod[*dialect.SelectQuery]) EmailVerificationOtpsQuery {
+	pkID := make(pgtypes.Array[int64], 0, len(os))
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		pkID = append(pkID, o.ID)
+	}
+	PKArgExpr := psql.Select(sm.Columns(
+		psql.F("unnest", psql.Cast(psql.Arg(pkID), "bigint[]")),
+	))
+
+	return EmailVerificationOtps.Query(append(mods,
+		sm.Where(psql.Group(EmailVerificationOtps.Columns.UserID).OP("IN", PKArgExpr)),
+	)...)
+}
+
 // PasswordResetOtps starts a query for related objects on password_reset_otps
 func (o *User) PasswordResetOtps(mods ...bob.Mod[*dialect.SelectQuery]) PasswordResetOtpsQuery {
 	return PasswordResetOtps.Query(append(mods,
@@ -867,6 +892,74 @@ func (os UserSlice) ReverseUpdatedBies(mods ...bob.Mod[*dialect.SelectQuery]) Us
 	return Users.Query(append(mods,
 		sm.Where(psql.Group(Users.Columns.UpdatedBy).OP("IN", PKArgExpr)),
 	)...)
+}
+
+func insertUserEmailVerificationOtps0(ctx context.Context, exec bob.Executor, emailVerificationOtps1 []*EmailVerificationOtpSetter, user0 *User) (EmailVerificationOtpSlice, error) {
+	for i := range emailVerificationOtps1 {
+		emailVerificationOtps1[i].UserID = omit.From(user0.ID)
+	}
+
+	ret, err := EmailVerificationOtps.Insert(bob.ToMods(emailVerificationOtps1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertUserEmailVerificationOtps0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachUserEmailVerificationOtps0(ctx context.Context, exec bob.Executor, count int, emailVerificationOtps1 EmailVerificationOtpSlice, user0 *User) (EmailVerificationOtpSlice, error) {
+	setter := &EmailVerificationOtpSetter{
+		UserID: omit.From(user0.ID),
+	}
+
+	err := emailVerificationOtps1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachUserEmailVerificationOtps0: %w", err)
+	}
+
+	return emailVerificationOtps1, nil
+}
+
+func (user0 *User) InsertEmailVerificationOtps(ctx context.Context, exec bob.Executor, related ...*EmailVerificationOtpSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	emailVerificationOtps1, err := insertUserEmailVerificationOtps0(ctx, exec, related, user0)
+	if err != nil {
+		return err
+	}
+
+	user0.R.EmailVerificationOtps = append(user0.R.EmailVerificationOtps, emailVerificationOtps1...)
+
+	for _, rel := range emailVerificationOtps1 {
+		rel.R.User = user0
+	}
+	return nil
+}
+
+func (user0 *User) AttachEmailVerificationOtps(ctx context.Context, exec bob.Executor, related ...*EmailVerificationOtp) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	emailVerificationOtps1 := EmailVerificationOtpSlice(related)
+
+	_, err = attachUserEmailVerificationOtps0(ctx, exec, len(related), emailVerificationOtps1, user0)
+	if err != nil {
+		return err
+	}
+
+	user0.R.EmailVerificationOtps = append(user0.R.EmailVerificationOtps, emailVerificationOtps1...)
+
+	for _, rel := range related {
+		rel.R.User = user0
+	}
+
+	return nil
 }
 
 func insertUserPasswordResetOtps0(ctx context.Context, exec bob.Executor, passwordResetOtps1 []*PasswordResetOtpSetter, user0 *User) (PasswordResetOtpSlice, error) {
@@ -1401,6 +1494,20 @@ func (o *User) Preload(name string, retrieved any) error {
 	}
 
 	switch name {
+	case "EmailVerificationOtps":
+		rels, ok := retrieved.(EmailVerificationOtpSlice)
+		if !ok {
+			return fmt.Errorf("user cannot load %T as %q", retrieved, name)
+		}
+
+		o.R.EmailVerificationOtps = rels
+
+		for _, rel := range rels {
+			if rel != nil {
+				rel.R.User = o
+			}
+		}
+		return nil
 	case "PasswordResetOtps":
 		rels, ok := retrieved.(PasswordResetOtpSlice)
 		if !ok {
@@ -1563,17 +1670,21 @@ func buildUserPreloader() userPreloader {
 }
 
 type userThenLoader[Q orm.Loadable] struct {
-	PasswordResetOtps  func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
-	RefreshTokens      func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
-	CreatedBy          func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
-	ReverseCreatedBies func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
-	DeletedBy          func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
-	ReverseDeletedBies func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
-	UpdatedBy          func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
-	ReverseUpdatedBies func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
+	EmailVerificationOtps func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
+	PasswordResetOtps     func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
+	RefreshTokens         func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
+	CreatedBy             func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
+	ReverseCreatedBies    func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
+	DeletedBy             func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
+	ReverseDeletedBies    func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
+	UpdatedBy             func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
+	ReverseUpdatedBies    func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
 }
 
 func buildUserThenLoader[Q orm.Loadable]() userThenLoader[Q] {
+	type EmailVerificationOtpsLoadInterface interface {
+		LoadEmailVerificationOtps(context.Context, bob.Executor, ...bob.Mod[*dialect.SelectQuery]) error
+	}
 	type PasswordResetOtpsLoadInterface interface {
 		LoadPasswordResetOtps(context.Context, bob.Executor, ...bob.Mod[*dialect.SelectQuery]) error
 	}
@@ -1600,6 +1711,12 @@ func buildUserThenLoader[Q orm.Loadable]() userThenLoader[Q] {
 	}
 
 	return userThenLoader[Q]{
+		EmailVerificationOtps: thenLoadBuilder[Q](
+			"EmailVerificationOtps",
+			func(ctx context.Context, exec bob.Executor, retrieved EmailVerificationOtpsLoadInterface, mods ...bob.Mod[*dialect.SelectQuery]) error {
+				return retrieved.LoadEmailVerificationOtps(ctx, exec, mods...)
+			},
+		),
 		PasswordResetOtps: thenLoadBuilder[Q](
 			"PasswordResetOtps",
 			func(ctx context.Context, exec bob.Executor, retrieved PasswordResetOtpsLoadInterface, mods ...bob.Mod[*dialect.SelectQuery]) error {
@@ -1649,6 +1766,67 @@ func buildUserThenLoader[Q orm.Loadable]() userThenLoader[Q] {
 			},
 		),
 	}
+}
+
+// LoadEmailVerificationOtps loads the user's EmailVerificationOtps into the .R struct
+func (o *User) LoadEmailVerificationOtps(ctx context.Context, exec bob.Executor, mods ...bob.Mod[*dialect.SelectQuery]) error {
+	if o == nil {
+		return nil
+	}
+
+	// Reset the relationship
+	o.R.EmailVerificationOtps = nil
+
+	related, err := o.EmailVerificationOtps(mods...).All(ctx, exec)
+	if err != nil {
+		return err
+	}
+
+	for _, rel := range related {
+		rel.R.User = o
+	}
+
+	o.R.EmailVerificationOtps = related
+	return nil
+}
+
+// LoadEmailVerificationOtps loads the user's EmailVerificationOtps into the .R struct
+func (os UserSlice) LoadEmailVerificationOtps(ctx context.Context, exec bob.Executor, mods ...bob.Mod[*dialect.SelectQuery]) error {
+	if len(os) == 0 {
+		return nil
+	}
+
+	emailVerificationOtps, err := os.EmailVerificationOtps(mods...).All(ctx, exec)
+	if err != nil {
+		return err
+	}
+
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+
+		o.R.EmailVerificationOtps = nil
+	}
+
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+
+		for _, rel := range emailVerificationOtps {
+
+			if !(o.ID == rel.UserID) {
+				continue
+			}
+
+			rel.R.User = o
+
+			o.R.EmailVerificationOtps = append(o.R.EmailVerificationOtps, rel)
+		}
+	}
+
+	return nil
 }
 
 // LoadPasswordResetOtps loads the user's PasswordResetOtps into the .R struct
@@ -2119,15 +2297,16 @@ func (os UserSlice) LoadReverseUpdatedBies(ctx context.Context, exec bob.Executo
 }
 
 type userJoins[Q dialect.Joinable] struct {
-	typ                string
-	PasswordResetOtps  modAs[Q, passwordResetOtpColumns]
-	RefreshTokens      modAs[Q, refreshTokenColumns]
-	CreatedBy          modAs[Q, userColumns]
-	ReverseCreatedBies modAs[Q, userColumns]
-	DeletedBy          modAs[Q, userColumns]
-	ReverseDeletedBies modAs[Q, userColumns]
-	UpdatedBy          modAs[Q, userColumns]
-	ReverseUpdatedBies modAs[Q, userColumns]
+	typ                   string
+	EmailVerificationOtps modAs[Q, emailVerificationOtpColumns]
+	PasswordResetOtps     modAs[Q, passwordResetOtpColumns]
+	RefreshTokens         modAs[Q, refreshTokenColumns]
+	CreatedBy             modAs[Q, userColumns]
+	ReverseCreatedBies    modAs[Q, userColumns]
+	DeletedBy             modAs[Q, userColumns]
+	ReverseDeletedBies    modAs[Q, userColumns]
+	UpdatedBy             modAs[Q, userColumns]
+	ReverseUpdatedBies    modAs[Q, userColumns]
 }
 
 func (j userJoins[Q]) aliasedAs(alias string) userJoins[Q] {
@@ -2137,6 +2316,20 @@ func (j userJoins[Q]) aliasedAs(alias string) userJoins[Q] {
 func buildUserJoins[Q dialect.Joinable](cols userColumns, typ string) userJoins[Q] {
 	return userJoins[Q]{
 		typ: typ,
+		EmailVerificationOtps: modAs[Q, emailVerificationOtpColumns]{
+			c: EmailVerificationOtps.Columns,
+			f: func(to emailVerificationOtpColumns) bob.Mod[Q] {
+				mods := make(mods.QueryMods[Q], 0, 1)
+
+				{
+					mods = append(mods, dialect.Join[Q](typ, EmailVerificationOtps.Name().As(to.Alias())).On(
+						to.UserID.EQ(cols.ID),
+					))
+				}
+
+				return mods
+			},
+		},
 		PasswordResetOtps: modAs[Q, passwordResetOtpColumns]{
 			c: PasswordResetOtps.Columns,
 			f: func(to passwordResetOtpColumns) bob.Mod[Q] {

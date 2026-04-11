@@ -17,20 +17,23 @@ var (
 )
 
 func Where[Q psql.Filterable]() struct {
-	GooseDBVersions   gooseDBVersionWhere[Q]
-	PasswordResetOtps passwordResetOtpWhere[Q]
-	RefreshTokens     refreshTokenWhere[Q]
-	Users             userWhere[Q]
+	EmailVerificationOtps emailVerificationOtpWhere[Q]
+	GooseDBVersions       gooseDBVersionWhere[Q]
+	PasswordResetOtps     passwordResetOtpWhere[Q]
+	RefreshTokens         refreshTokenWhere[Q]
+	Users                 userWhere[Q]
 } {
 	return struct {
-		GooseDBVersions   gooseDBVersionWhere[Q]
-		PasswordResetOtps passwordResetOtpWhere[Q]
-		RefreshTokens     refreshTokenWhere[Q]
-		Users             userWhere[Q]
+		EmailVerificationOtps emailVerificationOtpWhere[Q]
+		GooseDBVersions       gooseDBVersionWhere[Q]
+		PasswordResetOtps     passwordResetOtpWhere[Q]
+		RefreshTokens         refreshTokenWhere[Q]
+		Users                 userWhere[Q]
 	}{
-		GooseDBVersions:   buildGooseDBVersionWhere[Q](GooseDBVersions.Columns),
-		PasswordResetOtps: buildPasswordResetOtpWhere[Q](PasswordResetOtps.Columns),
-		RefreshTokens:     buildRefreshTokenWhere[Q](RefreshTokens.Columns),
-		Users:             buildUserWhere[Q](Users.Columns),
+		EmailVerificationOtps: buildEmailVerificationOtpWhere[Q](EmailVerificationOtps.Columns),
+		GooseDBVersions:       buildGooseDBVersionWhere[Q](GooseDBVersions.Columns),
+		PasswordResetOtps:     buildPasswordResetOtpWhere[Q](PasswordResetOtps.Columns),
+		RefreshTokens:         buildRefreshTokenWhere[Q](RefreshTokens.Columns),
+		Users:                 buildUserWhere[Q](Users.Columns),
 	}
 }

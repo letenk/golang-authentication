@@ -15,6 +15,7 @@ import (
 	"github.com/letenk/golang-authentication/internal/applications/auth/dto"
 	"github.com/letenk/golang-authentication/internal/applications/auth/service"
 	emailSvcMocks "github.com/letenk/golang-authentication/internal/applications/email/service/mocks"
+	emailVerificationMocks "github.com/letenk/golang-authentication/internal/applications/email_verification/repository/db/mocks"
 	otpRepoMocks "github.com/letenk/golang-authentication/internal/applications/password_reset/repository/db/mocks"
 	refreshMocks "github.com/letenk/golang-authentication/internal/applications/refresh_token/repository/db/mocks"
 	trxMocks "github.com/letenk/golang-authentication/internal/applications/transaction/mocks"
@@ -45,10 +46,18 @@ func newTestService(t *testing.T) (*service.AuthServiceImpl, *userMocks.MockUser
 	mockUser := userMocks.NewMockUserRepository(t)
 	mockToken := refreshMocks.NewMockRefreshTokenRepository(t)
 	mockOTP := otpRepoMocks.NewMockPasswordResetOTPRepository(t)
+	mockEmailVerification := emailVerificationMocks.NewMockEmailVerificationOTPRepository(t)
 	mockEmail := emailSvcMocks.NewMockEmailService(t)
 	mockTrx := trxMocks.NewMockTrxService(t)
 	otpConfig := &credential.OTPConfig{Expire: "5m", Length: 6}
-	svc := service.NewAuthService(mockTrx, mockUser, mockToken, mockOTP, mockEmail, newTestJWTConfig(t), otpConfig)
+
+	// Allow goroutine side-effect calls from Register's async SendVerificationEmail
+	// for methods that are not explicitly tested. FindByID is excluded here because
+	// other tests (e.g. GetMe) register their own specific expectations for it.
+	mockTrx.On("WithTx", mock.Anything, mock.Anything).Maybe().Return(nil)
+	mockEmail.On("SendVerificationOTP", mock.Anything, mock.Anything, mock.Anything).Maybe().Return(nil)
+
+	svc := service.NewAuthService(mockTrx, mockUser, mockToken, mockOTP, mockEmailVerification, mockEmail, newTestJWTConfig(t), otpConfig)
 	return svc, mockUser, mockToken
 }
 
@@ -113,6 +122,9 @@ func TestAuthService_Register(t *testing.T) {
 			setupMock: func(mu *userMocks.MockUserRepository) {
 				mu.EXPECT().FindByEmail(mock.Anything, "test@example.com").Return(nil, sql.ErrNoRows)
 				mu.EXPECT().Create(mock.Anything, mock.Anything).Return(newTestUser(1, "test@example.com", "", "hashed"), nil)
+				// Allow async goroutine (SendVerificationEmail) to call FindByID.
+				// Returns ErrNoRows so the goroutine exits early without further calls.
+				mu.On("FindByID", mock.Anything, mock.Anything).Maybe().Return(nil, sql.ErrNoRows)
 			},
 			wantErr: false,
 		},
@@ -161,6 +173,9 @@ func TestAuthService_Register(t *testing.T) {
 			tt.setupMock(mockUser)
 
 			result, err := svc.Register(context.Background(), tt.param)
+
+			// Allow async goroutine (SendVerificationEmail) to complete before mock cleanup.
+			time.Sleep(20 * time.Millisecond)
 
 			if tt.wantErr {
 				assert.Error(t, err)

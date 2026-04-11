@@ -34,4 +34,6 @@ func (controller *AuthController) AddRoutes(e *echo.Echo, authMiddleware middlew
 	groupV1.DELETE("/me", controller.DeleteMe, authMiddleware.Authenticate(true))
 	groupV1.POST("/forgot-password", controller.ForgotPassword)
 	groupV1.POST("/reset-password", controller.ResetPassword)
+	groupV1.POST("/verify-email", controller.VerifyEmail, authMiddleware.Authenticate(true))
+	groupV1.POST("/resend-verification-email", controller.ResendVerificationEmail, authMiddleware.Authenticate(true))
 }

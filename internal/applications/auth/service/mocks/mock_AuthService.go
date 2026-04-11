@@ -724,6 +724,88 @@ func (_c *MockAuthService_ResetPassword_Call) RunAndReturn(run func(context.Cont
 	return _c
 }
 
+// SendVerificationEmail provides a mock function with given fields: ctx, userID
+func (_m *MockAuthService) SendVerificationEmail(ctx context.Context, userID int64) error {
+	ret := _m.Called(ctx, userID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SendVerificationEmail")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, int64) error); ok {
+		r0 = rf(ctx, userID)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+type MockAuthService_SendVerificationEmail_Call struct{ *mock.Call }
+
+func (_e *MockAuthService_Expecter) SendVerificationEmail(ctx interface{}, userID interface{}) *MockAuthService_SendVerificationEmail_Call {
+	return &MockAuthService_SendVerificationEmail_Call{Call: _e.mock.On("SendVerificationEmail", ctx, userID)}
+}
+
+func (_c *MockAuthService_SendVerificationEmail_Call) Run(run func(ctx context.Context, userID int64)) *MockAuthService_SendVerificationEmail_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(int64))
+	})
+	return _c
+}
+
+func (_c *MockAuthService_SendVerificationEmail_Call) Return(_a0 error) *MockAuthService_SendVerificationEmail_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockAuthService_SendVerificationEmail_Call) RunAndReturn(run func(context.Context, int64) error) *MockAuthService_SendVerificationEmail_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// VerifyEmail provides a mock function with given fields: ctx, userID, code
+func (_m *MockAuthService) VerifyEmail(ctx context.Context, userID int64, code string) error {
+	ret := _m.Called(ctx, userID, code)
+
+	if len(ret) == 0 {
+		panic("no return value specified for VerifyEmail")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, int64, string) error); ok {
+		r0 = rf(ctx, userID, code)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+type MockAuthService_VerifyEmail_Call struct{ *mock.Call }
+
+func (_e *MockAuthService_Expecter) VerifyEmail(ctx interface{}, userID interface{}, code interface{}) *MockAuthService_VerifyEmail_Call {
+	return &MockAuthService_VerifyEmail_Call{Call: _e.mock.On("VerifyEmail", ctx, userID, code)}
+}
+
+func (_c *MockAuthService_VerifyEmail_Call) Run(run func(ctx context.Context, userID int64, code string)) *MockAuthService_VerifyEmail_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(int64), args[2].(string))
+	})
+	return _c
+}
+
+func (_c *MockAuthService_VerifyEmail_Call) Return(_a0 error) *MockAuthService_VerifyEmail_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockAuthService_VerifyEmail_Call) RunAndReturn(run func(context.Context, int64, string) error) *MockAuthService_VerifyEmail_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // NewMockAuthService creates a new instance of MockAuthService. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewMockAuthService(t interface {

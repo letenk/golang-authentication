@@ -12,14 +12,49 @@ import (
 )
 
 type Factory struct {
-	baseGooseDBVersionMods   GooseDBVersionModSlice
-	basePasswordResetOtpMods PasswordResetOtpModSlice
-	baseRefreshTokenMods     RefreshTokenModSlice
-	baseUserMods             UserModSlice
+	baseEmailVerificationOtpMods EmailVerificationOtpModSlice
+	baseGooseDBVersionMods       GooseDBVersionModSlice
+	basePasswordResetOtpMods     PasswordResetOtpModSlice
+	baseRefreshTokenMods         RefreshTokenModSlice
+	baseUserMods                 UserModSlice
 }
 
 func New() *Factory {
 	return &Factory{}
+}
+
+func (f *Factory) NewEmailVerificationOtp(mods ...EmailVerificationOtpMod) *EmailVerificationOtpTemplate {
+	return f.NewEmailVerificationOtpWithContext(context.Background(), mods...)
+}
+
+func (f *Factory) NewEmailVerificationOtpWithContext(ctx context.Context, mods ...EmailVerificationOtpMod) *EmailVerificationOtpTemplate {
+	o := &EmailVerificationOtpTemplate{f: f}
+
+	if f != nil {
+		f.baseEmailVerificationOtpMods.Apply(ctx, o)
+	}
+
+	EmailVerificationOtpModSlice(mods).Apply(ctx, o)
+
+	return o
+}
+
+func (f *Factory) FromExistingEmailVerificationOtp(m *models.EmailVerificationOtp) *EmailVerificationOtpTemplate {
+	o := &EmailVerificationOtpTemplate{f: f, alreadyPersisted: true}
+
+	o.ID = func() int64 { return m.ID }
+	o.UserID = func() int64 { return m.UserID }
+	o.Code = func() string { return m.Code }
+	o.ExpiresAt = func() time.Time { return m.ExpiresAt }
+	o.UsedAt = func() null.Val[time.Time] { return m.UsedAt }
+	o.CreatedAt = func() null.Val[time.Time] { return m.CreatedAt }
+
+	ctx := context.Background()
+	if m.R.User != nil {
+		EmailVerificationOtpMods.WithExistingUser(m.R.User).Apply(ctx, o)
+	}
+
+	return o
 }
 
 func (f *Factory) NewGooseDBVersion(mods ...GooseDBVersionMod) *GooseDBVersionTemplate {
@@ -158,6 +193,9 @@ func (f *Factory) FromExistingUser(m *models.User) *UserTemplate {
 	o.VerifiedAt = func() null.Val[time.Time] { return m.VerifiedAt }
 
 	ctx := context.Background()
+	if len(m.R.EmailVerificationOtps) > 0 {
+		UserMods.AddExistingEmailVerificationOtps(m.R.EmailVerificationOtps...).Apply(ctx, o)
+	}
 	if len(m.R.PasswordResetOtps) > 0 {
 		UserMods.AddExistingPasswordResetOtps(m.R.PasswordResetOtps...).Apply(ctx, o)
 	}
@@ -184,6 +222,14 @@ func (f *Factory) FromExistingUser(m *models.User) *UserTemplate {
 	}
 
 	return o
+}
+
+func (f *Factory) ClearBaseEmailVerificationOtpMods() {
+	f.baseEmailVerificationOtpMods = nil
+}
+
+func (f *Factory) AddBaseEmailVerificationOtpMod(mods ...EmailVerificationOtpMod) {
+	f.baseEmailVerificationOtpMods = append(f.baseEmailVerificationOtpMods, mods...)
 }
 
 func (f *Factory) ClearBaseGooseDBVersionMods() {
