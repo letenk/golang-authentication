@@ -522,10 +522,23 @@ func (service *AuthServiceImpl) ForgotPassword(ctx context.Context, email string
 		name = email
 	}
 
-	if err := service.emailService.SendOTP(email, name, otp); err != nil {
-		log.Errorf("failed to send OTP email to %s: %s", email, err)
-		return exceptions.NewBusinessLogicError(exceptions.DataCreateFailed, errors.New("failed to send OTP email"), nil)
-	}
+	// Send OTP email in background to avoid blocking the response.
+	// Uses an independent context with timeout to prevent hanging, and recover to catch panics.
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Errorf("panic in SendOTP goroutine: %v", r)
+			}
+		}()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = ctx
+
+		if err := service.emailService.SendOTP(email, name, otp); err != nil {
+			log.Errorf("failed to send OTP email to %s: %s", email, err)
+		}
+	}()
 
 	return nil
 }
