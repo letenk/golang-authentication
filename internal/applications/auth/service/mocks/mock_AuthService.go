@@ -474,6 +474,114 @@ func (_c *MockAuthService_GetSessions_Call) RunAndReturn(run func(context.Contex
 	return _c
 }
 
+// UpdateProfile provides a mock function with given fields: ctx, userID, req
+func (_m *MockAuthService) UpdateProfile(ctx context.Context, userID int64, req *dto.UpdateProfileRequest) (*dto.UserResponse, error) {
+	ret := _m.Called(ctx, userID, req)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpdateProfile")
+	}
+
+	var r0 *dto.UserResponse
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, int64, *dto.UpdateProfileRequest) (*dto.UserResponse, error)); ok {
+		return rf(ctx, userID, req)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, int64, *dto.UpdateProfileRequest) *dto.UserResponse); ok {
+		r0 = rf(ctx, userID, req)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*dto.UserResponse)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, int64, *dto.UpdateProfileRequest) error); ok {
+		r1 = rf(ctx, userID, req)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockAuthService_UpdateProfile_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdateProfile'
+type MockAuthService_UpdateProfile_Call struct {
+	*mock.Call
+}
+
+// UpdateProfile is a helper method to define mock.On call
+//   - ctx context.Context
+//   - userID int64
+//   - req *dto.UpdateProfileRequest
+func (_e *MockAuthService_Expecter) UpdateProfile(ctx interface{}, userID interface{}, req interface{}) *MockAuthService_UpdateProfile_Call {
+	return &MockAuthService_UpdateProfile_Call{Call: _e.mock.On("UpdateProfile", ctx, userID, req)}
+}
+
+func (_c *MockAuthService_UpdateProfile_Call) Run(run func(ctx context.Context, userID int64, req *dto.UpdateProfileRequest)) *MockAuthService_UpdateProfile_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(int64), args[2].(*dto.UpdateProfileRequest))
+	})
+	return _c
+}
+
+func (_c *MockAuthService_UpdateProfile_Call) Return(_a0 *dto.UserResponse, _a1 error) *MockAuthService_UpdateProfile_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockAuthService_UpdateProfile_Call) RunAndReturn(run func(context.Context, int64, *dto.UpdateProfileRequest) (*dto.UserResponse, error)) *MockAuthService_UpdateProfile_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// UpdatePassword provides a mock function with given fields: ctx, userID, req
+func (_m *MockAuthService) UpdatePassword(ctx context.Context, userID int64, req *dto.UpdatePasswordRequest) error {
+	ret := _m.Called(ctx, userID, req)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpdatePassword")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, int64, *dto.UpdatePasswordRequest) error); ok {
+		r0 = rf(ctx, userID, req)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockAuthService_UpdatePassword_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdatePassword'
+type MockAuthService_UpdatePassword_Call struct {
+	*mock.Call
+}
+
+// UpdatePassword is a helper method to define mock.On call
+//   - ctx context.Context
+//   - userID int64
+//   - req *dto.UpdatePasswordRequest
+func (_e *MockAuthService_Expecter) UpdatePassword(ctx interface{}, userID interface{}, req interface{}) *MockAuthService_UpdatePassword_Call {
+	return &MockAuthService_UpdatePassword_Call{Call: _e.mock.On("UpdatePassword", ctx, userID, req)}
+}
+
+func (_c *MockAuthService_UpdatePassword_Call) Run(run func(ctx context.Context, userID int64, req *dto.UpdatePasswordRequest)) *MockAuthService_UpdatePassword_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(int64), args[2].(*dto.UpdatePasswordRequest))
+	})
+	return _c
+}
+
+func (_c *MockAuthService_UpdatePassword_Call) Return(_a0 error) *MockAuthService_UpdatePassword_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockAuthService_UpdatePassword_Call) RunAndReturn(run func(context.Context, int64, *dto.UpdatePasswordRequest) error) *MockAuthService_UpdatePassword_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // RevokeSession provides a mock function with given fields: ctx, userID, sessionID
 func (_m *MockAuthService) RevokeSession(ctx context.Context, userID int64, sessionID int64) error {
 	ret := _m.Called(ctx, userID, sessionID)

@@ -5,7 +5,9 @@ import (
 	"strconv"
 
 	"github.com/labstack/echo/v4"
+	"github.com/letenk/golang-authentication/internal/applications/auth/dto"
 	"github.com/letenk/golang-authentication/internal/applications/auth/service"
+	"github.com/letenk/golang-authentication/internal/helper"
 	"github.com/letenk/golang-authentication/internal/helper/response"
 	"github.com/letenk/golang-authentication/internal/utils"
 	"github.com/letenk/golang-authentication/internal/utils/headers"
@@ -52,4 +54,43 @@ func (controller *UserController) RevokeSession(ctx echo.Context) error {
 	}
 
 	return response.SuccessWithMessage(ctx, "Session revoked successfully", &struct{}{})
+}
+
+// UpdateProfile updates the authenticated user's full name and/or phone number
+func (controller *UserController) UpdateProfile(ctx echo.Context) error {
+	header, err := utils.GetContextHeaders(ctx, headers.ContextHeaders)
+	if err != nil {
+		return err
+	}
+
+	req := &dto.UpdateProfileRequest{}
+	if err := helper.BindAndValidate(ctx, req); err != nil {
+		return err
+	}
+
+	result, err := controller.authService.UpdateProfile(ctx.Request().Context(), header.UserID, req)
+	if err != nil {
+		return err
+	}
+
+	return response.SuccessWithMessage(ctx, "Profile updated successfully", result)
+}
+
+// UpdatePassword changes the authenticated user's password
+func (controller *UserController) UpdatePassword(ctx echo.Context) error {
+	header, err := utils.GetContextHeaders(ctx, headers.ContextHeaders)
+	if err != nil {
+		return err
+	}
+
+	req := &dto.UpdatePasswordRequest{}
+	if err := helper.BindAndValidate(ctx, req); err != nil {
+		return err
+	}
+
+	if err := controller.authService.UpdatePassword(ctx.Request().Context(), header.UserID, req); err != nil {
+		return err
+	}
+
+	return response.SuccessWithMessage(ctx, "Password updated successfully", &struct{}{})
 }

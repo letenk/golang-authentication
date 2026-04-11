@@ -10,4 +10,6 @@ func (controller *UserController) AddRoutes(e *echo.Echo, authMiddleware middlew
 
 	groupV1.GET("/sessions", controller.GetSessions, authMiddleware.Authenticate(true))
 	groupV1.DELETE("/sessions/:id", controller.RevokeSession, authMiddleware.Authenticate(true))
+	groupV1.PUT("/profile", controller.UpdateProfile, authMiddleware.Authenticate(true))
+	groupV1.PUT("/password", controller.UpdatePassword, authMiddleware.Authenticate(true))
 }

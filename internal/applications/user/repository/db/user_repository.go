@@ -12,4 +12,5 @@ type UserRepository interface {
 	FindByEmail(ctx context.Context, email string) (*models.User, error)
 	FindByPhone(ctx context.Context, phone string) (*models.User, error)
 	SoftDeleteByID(ctx context.Context, id int64, deletedBy int64) error
+	UpdateByID(ctx context.Context, id int64, setter *models.UserSetter) (*models.User, error)
 }

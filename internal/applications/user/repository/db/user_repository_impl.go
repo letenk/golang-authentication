@@ -78,6 +78,21 @@ func (r *UserRepositoryImpl) FindByID(ctx context.Context, id int64) (*models.Us
 	return user, nil
 }
 
+func (r *UserRepositoryImpl) UpdateByID(ctx context.Context, id int64, setter *models.UserSetter) (*models.User, error) {
+	setter.UpdatedAt = omitnull.From(time.Now().UTC())
+
+	user, err := models.Users.Update(
+		models.UpdateWhere.Users.ID.EQ(id),
+		models.UpdateWhere.Users.DeletedAt.IsNull(),
+		setter.UpdateMod(),
+	).One(ctx, r.db.Exec)
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
+}
+
 func (r *UserRepositoryImpl) SoftDeleteByID(ctx context.Context, id int64, deletedBy int64) error {
 	now := time.Now().UTC()
 
