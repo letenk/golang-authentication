@@ -4,69 +4,112 @@ import (
 	"testing"
 )
 
-func TestEnsurePhoneNumber(t *testing.T) {
+func TestNormalizePhoneNumber_Valid(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
 		expected string
 	}{
 		{
-			name:     "Number already in 628 format",
-			input:    "628123456789",
-			expected: "628123456789",
-		},
-		{
-			name:     "Number with prefix 0",
-			input:    "08123456789",
-			expected: "628123456789",
-		},
-		{
-			name:     "Number with prefix +62",
+			name:     "Indonesia mobile",
 			input:    "+628123456789",
-			expected: "628123456789",
+			expected: "+628123456789",
 		},
 		{
-			name:     "Number with prefix 62",
-			input:    "628987654321",
-			expected: "628987654321",
+			name:     "Indonesia mobile with spaces",
+			input:    "+62 812 3456 789",
+			expected: "+628123456789",
 		},
 		{
-			name:     "Number with prefix 00",
-			input:    "008123456789",
-			expected: "628123456789",
+			name:     "Indonesia mobile with dashes",
+			input:    "+62-812-3456-789",
+			expected: "+628123456789",
 		},
 		{
-			name:     "Number with prefix +62 without 8",
-			input:    "+62123456789",
-			expected: "62123456789",
+			name:     "US number",
+			input:    "+14155552671",
+			expected: "+14155552671",
 		},
 		{
-			name:     "Number with multiple leading zeros",
-			input:    "0008123456789",
-			expected: "628123456789",
+			name:     "US number with formatting",
+			input:    "+1 (415) 555-2671",
+			expected: "+14155552671",
 		},
 		{
-			name:     "Number with spaces (not cleaned)",
-			input:    "0812 3456 789",
-			expected: "62812 3456 789",
+			name:     "UK number",
+			input:    "+447911123456",
+			expected: "+447911123456",
 		},
 		{
-			name:     "Empty number",
-			input:    "",
-			expected: "62",
+			name:     "Japan number",
+			input:    "+819012345678",
+			expected: "+819012345678",
 		},
 		{
-			name:     "Number with only +62 prefix",
-			input:    "+62",
-			expected: "62",
+			name:     "Singapore number",
+			input:    "+6591234567",
+			expected: "+6591234567",
+		},
+		{
+			name:     "Malaysia number",
+			input:    "+60123456789",
+			expected: "+60123456789",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := EnsurePhoneNumber(tt.input)
+			result, err := NormalizePhoneNumber(tt.input)
+			if err != nil {
+				t.Fatalf("NormalizePhoneNumber(%q) returned error: %v", tt.input, err)
+			}
 			if result != tt.expected {
-				t.Errorf("EnsurePhoneNumber(%q) = %q, want %q", tt.input, result, tt.expected)
+				t.Errorf("NormalizePhoneNumber(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestNormalizePhoneNumber_Invalid(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{
+			name:  "empty string",
+			input: "",
+		},
+		{
+			name:  "no country code prefix",
+			input: "08123456789",
+		},
+		{
+			name:  "missing plus sign",
+			input: "628123456789",
+		},
+		{
+			name:  "too short",
+			input: "+123",
+		},
+		{
+			name:  "non-numeric",
+			input: "+abc12345",
+		},
+		{
+			name:  "only plus sign",
+			input: "+",
+		},
+		{
+			name:  "invalid country code",
+			input: "+9991234567890",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := NormalizePhoneNumber(tt.input)
+			if err == nil {
+				t.Errorf("NormalizePhoneNumber(%q) expected error, got result %q", tt.input, result)
 			}
 		})
 	}

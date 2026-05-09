@@ -136,7 +136,7 @@ func TestAuthService_Register(t *testing.T) {
 				Password: "Password1!",
 			},
 			setupMock: func(mu *userMocks.MockUserRepository) {
-				mu.EXPECT().FindByPhone(mock.Anything, "628123456789").Return(nil, sql.ErrNoRows)
+				mu.EXPECT().FindByPhone(mock.Anything, "+628123456789").Return(nil, sql.ErrNoRows)
 				mu.EXPECT().Create(mock.Anything, mock.Anything).Return(newTestUser(1, "", "+628123456789", "hashed"), nil)
 			},
 			wantErr: false,
@@ -160,7 +160,7 @@ func TestAuthService_Register(t *testing.T) {
 				Password: "Password1!",
 			},
 			setupMock: func(mu *userMocks.MockUserRepository) {
-				mu.EXPECT().FindByPhone(mock.Anything, "628123456789").Return(newTestUser(1, "", "628123456789", "hashed"), nil)
+				mu.EXPECT().FindByPhone(mock.Anything, "+628123456789").Return(newTestUser(1, "", "+628123456789", "hashed"), nil)
 			},
 			wantErr: true,
 			errType: &exceptions.BusinessLogicError{},
@@ -223,7 +223,7 @@ func TestAuthService_Login(t *testing.T) {
 				Password: testPassword,
 			},
 			setupMock: func(mu *userMocks.MockUserRepository, mt *refreshMocks.MockRefreshTokenRepository) {
-				mu.EXPECT().FindByPhone(mock.Anything, "628123456789").Return(newTestUser(1, "", "628123456789", hashedPassword), nil)
+				mu.EXPECT().FindByPhone(mock.Anything, "+628123456789").Return(newTestUser(1, "", "+628123456789", hashedPassword), nil)
 				mt.EXPECT().Create(mock.Anything, mock.Anything).Return(&models.RefreshToken{}, nil)
 			},
 			wantErr: false,
