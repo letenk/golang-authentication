@@ -3,15 +3,15 @@
 
 package dberrors
 
-var UserErrors = &userErrors{
-	ErrUniqueUsersPkey: &UniqueConstraintError{
+var OtpErrors = &otpErrors{
+	ErrUniqueOtpsPkey: &UniqueConstraintError{
 		schema:  "",
-		table:   "users",
+		table:   "otps",
 		columns: []string{"id"},
-		s:       "users_pkey",
+		s:       "otps_pkey",
 	},
 }
 
-type userErrors struct {
-	ErrUniqueUsersPkey *UniqueConstraintError
+type otpErrors struct {
+	ErrUniqueOtpsPkey *UniqueConstraintError
 }

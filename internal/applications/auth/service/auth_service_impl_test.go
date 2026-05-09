@@ -15,8 +15,7 @@ import (
 	"github.com/letenk/golang-authentication/internal/applications/auth/dto"
 	"github.com/letenk/golang-authentication/internal/applications/auth/service"
 	emailSvcMocks "github.com/letenk/golang-authentication/internal/applications/email/service/mocks"
-	emailVerificationMocks "github.com/letenk/golang-authentication/internal/applications/email_verification/repository/db/mocks"
-	otpRepoMocks "github.com/letenk/golang-authentication/internal/applications/password_reset/repository/db/mocks"
+	otpRepoMocks "github.com/letenk/golang-authentication/internal/applications/otp/repository/db/mocks"
 	refreshMocks "github.com/letenk/golang-authentication/internal/applications/refresh_token/repository/db/mocks"
 	trxMocks "github.com/letenk/golang-authentication/internal/applications/transaction/mocks"
 	userMocks "github.com/letenk/golang-authentication/internal/applications/user/repository/db/mocks"
@@ -45,8 +44,7 @@ func newTestService(t *testing.T) (*service.AuthServiceImpl, *userMocks.MockUser
 	t.Helper()
 	mockUser := userMocks.NewMockUserRepository(t)
 	mockToken := refreshMocks.NewMockRefreshTokenRepository(t)
-	mockOTP := otpRepoMocks.NewMockPasswordResetOTPRepository(t)
-	mockEmailVerification := emailVerificationMocks.NewMockEmailVerificationOTPRepository(t)
+	mockOTP := otpRepoMocks.NewMockOTPRepository(t)
 	mockEmail := emailSvcMocks.NewMockEmailService(t)
 	mockTrx := trxMocks.NewMockTrxService(t)
 	otpConfig := &credential.OTPConfig{Expire: "5m", Length: 6}
@@ -57,7 +55,7 @@ func newTestService(t *testing.T) (*service.AuthServiceImpl, *userMocks.MockUser
 	mockTrx.On("WithTx", mock.Anything, mock.Anything).Maybe().Return(nil)
 	mockEmail.On("SendVerificationOTP", mock.Anything, mock.Anything, mock.Anything).Maybe().Return(nil)
 
-	svc := service.NewAuthService(mockTrx, mockUser, mockToken, mockOTP, mockEmailVerification, mockEmail, newTestJWTConfig(t), otpConfig)
+	svc := service.NewAuthService(mockTrx, mockUser, mockToken, mockOTP, mockEmail, newTestJWTConfig(t), otpConfig)
 	return svc, mockUser, mockToken
 }
 
