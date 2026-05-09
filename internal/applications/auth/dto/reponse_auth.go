@@ -17,11 +17,10 @@ type RegisterResponse struct {
 
 // LoginResponse represents login response
 type LoginResponse struct {
-	User                   *UserResponse `json:"user"`
-	AccessToken            string        `json:"access_token"`
-	RefreshToken           string        `json:"refresh_token"`
-	AccessTokenExpiresAt   string        `json:"access_token_expires_at"`
-	RefreshTokenExpiresAt  string        `json:"refresh_token_expires_at"`
+	AccessToken           string `json:"access_token"`
+	RefreshToken          string `json:"refresh_token"`
+	AccessTokenExpiresAt  string `json:"access_token_expires_at"`
+	RefreshTokenExpiresAt string `json:"refresh_token_expires_at"`
 }
 
 // RefreshTokenResponse represents token refresh response
