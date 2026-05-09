@@ -1,6 +1,8 @@
-# Go Auth System — Production-Ready Authentication Boilerplate
+# Go Auth System — Authentication Boilerplate Built with Production-Grade Patterns
 
-A complete, production-ready authentication boilerplate built with Go. Designed to be the starting point for any Go project that requires a solid auth foundation — no boilerplate writing from scratch every time.
+A well-architected authentication boilerplate built with Go, designed to be the starting point for any Go project that needs a solid auth foundation. The patterns and architecture here — type-safe queries via Bob ORM, compile-time DI via Wire, token rotation, generic OTP system, internationally-aware phone normalization — are the same patterns you'd reach for in production code.
+
+This is a **foundation, not a finished production system**. Use it to skip the boilerplate; harden it for your production environment as you grow.
 
 > Built as a personal boilerplate and portfolio project by [Rizky Darmawan](https://github.com/letenk).
 
@@ -29,7 +31,7 @@ Every new project needs authentication. Instead of rebuilding the same patterns 
 | Layer | Library | Why |
 |---|---|---|
 | **HTTP Framework** | [Echo v4](https://github.com/labstack/echo) | Minimal, fast, great middleware ecosystem |
-| **ORM / Query Builder** | [Bob v0.42](https://github.com/stephenafamo/bob) | Type-safe SQL, code generation, no magic |
+| **ORM / Query Builder** | [Bob v0.43](https://github.com/stephenafamo/bob) | Type-safe SQL, code generation, no magic |
 | **Database** | PostgreSQL | Battle-tested, feature-rich relational DB |
 | **Migrations** | [Goose v3](https://github.com/pressly/goose) | Simple, SQL-first migration tool |
 | **JWT** | [golang-jwt/jwt v5](https://github.com/golang-jwt/jwt) | Standard JWT library with full RFC support |
@@ -102,8 +104,7 @@ For full documentation and usage examples, see the [Bob official documentation](
 │   └── applications/
 │       ├── auth/                # Auth feature (controller, service, dto, mocks)
 │       ├── email/               # SMTP email service
-│       ├── email_verification/  # Email OTP repository
-│       ├── password_reset/      # Password reset OTP repository
+│       ├── otp/                 # Generic OTP repository (purpose: email_verification, password_reset, ...)
 │       ├── refresh_token/       # Refresh token repository
 │       ├── transaction/         # TrxService — WithTx abstraction
 │       └── user/                # User repository + profile controller
@@ -272,11 +273,10 @@ refresh_tokens
   device_name, device_id, ip_address, user_agent
   expires_at, revoked_at, replaced_by_token
 
-password_reset_otps
-  id, user_id, code, expires_at, used_at
-
-email_verification_otps
-  id, user_id, code, expires_at, used_at
+otps
+  id, user_id, code, purpose, expires_at, used_at
+  -- single generic table, `purpose` distinguishes use case
+  -- ('email_verification', 'password_reset', ...)
 ```
 
 ---
