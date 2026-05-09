@@ -6,6 +6,7 @@ import (
 	context "context"
 
 	bob "github.com/stephenafamo/bob"
+
 	mock "github.com/stretchr/testify/mock"
 
 	models "github.com/letenk/golang-authentication/bob/models"
@@ -396,7 +397,7 @@ type MockUserRepository_UpdatePasswordWithExec_Call struct {
 //   - exec bob.Executor
 //   - userID int64
 //   - hashedPassword string
-func (_e *MockUserRepository_Expecter) UpdatePasswordWithExec(ctx, exec, userID, hashedPassword interface{}) *MockUserRepository_UpdatePasswordWithExec_Call {
+func (_e *MockUserRepository_Expecter) UpdatePasswordWithExec(ctx interface{}, exec interface{}, userID interface{}, hashedPassword interface{}) *MockUserRepository_UpdatePasswordWithExec_Call {
 	return &MockUserRepository_UpdatePasswordWithExec_Call{Call: _e.mock.On("UpdatePasswordWithExec", ctx, exec, userID, hashedPassword)}
 }
 

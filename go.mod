@@ -18,7 +18,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.33
 	github.com/pressly/goose/v3 v3.26.0
 	github.com/spf13/viper v1.21.0
-	github.com/stephenafamo/bob v0.42.0
+	github.com/stephenafamo/bob v0.43.0
 	github.com/stretchr/testify v1.11.1
 	github.com/ziutek/mymysql v1.5.4
 )

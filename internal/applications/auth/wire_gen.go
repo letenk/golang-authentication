@@ -13,8 +13,7 @@ import (
 	"github.com/letenk/golang-authentication/configs/jwt_config"
 	"github.com/letenk/golang-authentication/internal/applications/auth/service"
 	emailSvc "github.com/letenk/golang-authentication/internal/applications/email/service"
-	emailVerificationRepo "github.com/letenk/golang-authentication/internal/applications/email_verification/repository/db"
-	otpRepo "github.com/letenk/golang-authentication/internal/applications/password_reset/repository/db"
+	otpRepo "github.com/letenk/golang-authentication/internal/applications/otp/repository/db"
 	tokenRepo "github.com/letenk/golang-authentication/internal/applications/refresh_token/repository/db"
 	"github.com/letenk/golang-authentication/internal/applications/transaction"
 	userRepo "github.com/letenk/golang-authentication/internal/applications/user/repository/db"
@@ -31,10 +30,9 @@ func InitializeAuthService(
 ) *service.AuthServiceImpl {
 	userRepositoryImpl := userRepo.NewUserRepository(db)
 	refreshTokenRepositoryImpl := tokenRepo.NewRefreshTokenRepository(db)
-	passwordResetOTPRepositoryImpl := otpRepo.NewPasswordResetOTPRepository(db)
-	emailVerificationOTPRepositoryImpl := emailVerificationRepo.NewEmailVerificationOTPRepository(db)
+	otpRepositoryImpl := otpRepo.NewOTPRepository(db)
 	trxService := transaction.NewTrxService(db)
-	authServiceImpl := service.NewAuthService(trxService, userRepositoryImpl, refreshTokenRepositoryImpl, passwordResetOTPRepositoryImpl, emailVerificationOTPRepositoryImpl, emailService, jwtConfig, otpConfig)
+	authServiceImpl := service.NewAuthService(trxService, userRepositoryImpl, refreshTokenRepositoryImpl, otpRepositoryImpl, emailService, jwtConfig, otpConfig)
 	return authServiceImpl
 }
 
@@ -45,10 +43,8 @@ var providerSetAuth = wire.NewSet(
 	wire.Bind(new(userRepo.UserRepository), new(*userRepo.UserRepositoryImpl)),
 	tokenRepo.NewRefreshTokenRepository,
 	wire.Bind(new(tokenRepo.RefreshTokenRepository), new(*tokenRepo.RefreshTokenRepositoryImpl)),
-	otpRepo.NewPasswordResetOTPRepository,
-	wire.Bind(new(otpRepo.PasswordResetOTPRepository), new(*otpRepo.PasswordResetOTPRepositoryImpl)),
-	emailVerificationRepo.NewEmailVerificationOTPRepository,
-	wire.Bind(new(emailVerificationRepo.EmailVerificationOTPRepository), new(*emailVerificationRepo.EmailVerificationOTPRepositoryImpl)),
+	otpRepo.NewOTPRepository,
+	wire.Bind(new(otpRepo.OTPRepository), new(*otpRepo.OTPRepositoryImpl)),
 	transaction.NewTrxService,
 	service.NewAuthService,
 	wire.Bind(new(service.AuthService), new(*service.AuthServiceImpl)),

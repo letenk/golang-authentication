@@ -10,51 +10,47 @@ import (
 	"github.com/aarondl/opt/omitnull"
 	"github.com/labstack/gommon/log"
 	"github.com/letenk/golang-authentication/bob/models"
+	"github.com/letenk/golang-authentication/configs/credential"
 	"github.com/letenk/golang-authentication/configs/jwt_config"
 	"github.com/letenk/golang-authentication/exceptions"
 	"github.com/letenk/golang-authentication/internal/applications/auth/dto"
-	refreshTokenRepo "github.com/letenk/golang-authentication/internal/applications/refresh_token/repository/db"
-	userRepo "github.com/letenk/golang-authentication/internal/applications/user/repository/db"
 	emailService "github.com/letenk/golang-authentication/internal/applications/email/service"
-	emailVerificationRepo "github.com/letenk/golang-authentication/internal/applications/email_verification/repository/db"
-	otpRepo "github.com/letenk/golang-authentication/internal/applications/password_reset/repository/db"
+	otpRepo "github.com/letenk/golang-authentication/internal/applications/otp/repository/db"
+	refreshTokenRepo "github.com/letenk/golang-authentication/internal/applications/refresh_token/repository/db"
 	"github.com/letenk/golang-authentication/internal/applications/transaction"
-	"github.com/letenk/golang-authentication/configs/credential"
+	userRepo "github.com/letenk/golang-authentication/internal/applications/user/repository/db"
 	"github.com/letenk/golang-authentication/internal/utils"
 	"github.com/stephenafamo/bob"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type AuthServiceImpl struct {
-	trxService              transaction.TrxService
-	userRepository          userRepo.UserRepository
-	tokenRepository         refreshTokenRepo.RefreshTokenRepository
-	otpRepository           otpRepo.PasswordResetOTPRepository
-	emailVerificationRepo   emailVerificationRepo.EmailVerificationOTPRepository
-	emailService            emailService.EmailService
-	jwtConfig               *jwt_config.JWTConfig
-	otpConfig               *credential.OTPConfig
+	trxService      transaction.TrxService
+	userRepository  userRepo.UserRepository
+	tokenRepository refreshTokenRepo.RefreshTokenRepository
+	otpRepository   otpRepo.OTPRepository
+	emailService    emailService.EmailService
+	jwtConfig       *jwt_config.JWTConfig
+	otpConfig       *credential.OTPConfig
 }
 
 func NewAuthService(
 	trxService transaction.TrxService,
 	userRepository userRepo.UserRepository,
 	tokenRepository refreshTokenRepo.RefreshTokenRepository,
-	otpRepository otpRepo.PasswordResetOTPRepository,
-	emailVerificationRepo emailVerificationRepo.EmailVerificationOTPRepository,
+	otpRepository otpRepo.OTPRepository,
 	emailService emailService.EmailService,
 	jwtConfig *jwt_config.JWTConfig,
 	otpConfig *credential.OTPConfig,
 ) *AuthServiceImpl {
 	return &AuthServiceImpl{
-		trxService:            trxService,
-		userRepository:        userRepository,
-		tokenRepository:       tokenRepository,
-		otpRepository:         otpRepository,
-		emailVerificationRepo: emailVerificationRepo,
-		emailService:          emailService,
-		jwtConfig:             jwtConfig,
-		otpConfig:             otpConfig,
+		trxService:      trxService,
+		userRepository:  userRepository,
+		tokenRepository: tokenRepository,
+		otpRepository:   otpRepository,
+		emailService:    emailService,
+		jwtConfig:       jwtConfig,
+		otpConfig:       otpConfig,
 	}
 }
 
@@ -533,10 +529,15 @@ func (service *AuthServiceImpl) ForgotPassword(ctx context.Context, email string
 	expiresAt := time.Now().UTC().Add(otpExpire)
 
 	err = service.trxService.WithTx(ctx, func(tx bob.Executor) error {
-		if err := service.otpRepository.InvalidatePreviousByUserIDWithExec(ctx, tx, user.ID); err != nil {
+		if err := service.otpRepository.InvalidatePreviousByUserIDAndPurposeWithExec(ctx, tx, user.ID, otpRepo.OTPPurposePasswordReset); err != nil {
 			return err
 		}
-		_, err := service.otpRepository.CreateWithExec(ctx, tx, user.ID, otp, expiresAt)
+		_, err := service.otpRepository.CreateWithExec(ctx, tx, otpRepo.CreateOTPParams{
+			UserID:    user.ID,
+			Code:      otp,
+			Purpose:   otpRepo.OTPPurposePasswordReset,
+			ExpiresAt: expiresAt,
+		})
 		return err
 	})
 	if err != nil {
@@ -581,7 +582,7 @@ func (service *AuthServiceImpl) ResetPassword(ctx context.Context, req *dto.Rese
 		return exceptions.NewBusinessLogicError(exceptions.DataGetFailed, errors.New("failed to process request"), nil)
 	}
 
-	otpRecord, err := service.otpRepository.FindValidByUserAndCode(ctx, user.ID, req.OTP)
+	otpRecord, err := service.otpRepository.FindValidByUserAndCode(ctx, user.ID, otpRepo.OTPPurposePasswordReset, req.OTP)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return exceptions.NewBusinessLogicError(exceptions.InvalidArgument, errors.New("invalid or expired OTP"), nil)
@@ -645,10 +646,15 @@ func (service *AuthServiceImpl) SendVerificationEmail(ctx context.Context, userI
 	expiresAt := time.Now().UTC().Add(otpExpire)
 
 	err = service.trxService.WithTx(ctx, func(tx bob.Executor) error {
-		if err := service.emailVerificationRepo.InvalidatePreviousByUserIDWithExec(ctx, tx, userID); err != nil {
+		if err := service.otpRepository.InvalidatePreviousByUserIDAndPurposeWithExec(ctx, tx, userID, otpRepo.OTPPurposeEmailVerification); err != nil {
 			return err
 		}
-		_, err := service.emailVerificationRepo.CreateWithExec(ctx, tx, userID, otp, expiresAt)
+		_, err := service.otpRepository.CreateWithExec(ctx, tx, otpRepo.CreateOTPParams{
+			UserID:    userID,
+			Code:      otp,
+			Purpose:   otpRepo.OTPPurposeEmailVerification,
+			ExpiresAt: expiresAt,
+		})
 		return err
 	})
 	if err != nil {
@@ -685,7 +691,7 @@ func (service *AuthServiceImpl) SendVerificationEmail(ctx context.Context, userI
 
 // VerifyEmail validates the OTP and marks the user's email as verified
 func (service *AuthServiceImpl) VerifyEmail(ctx context.Context, userID int64, code string) error {
-	otpRecord, err := service.emailVerificationRepo.FindValidByUserAndCode(ctx, userID, code)
+	otpRecord, err := service.otpRepository.FindValidByUserAndCode(ctx, userID, otpRepo.OTPPurposeEmailVerification, code)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return exceptions.NewBusinessLogicError(exceptions.InvalidArgument, errors.New("invalid or expired OTP"), nil)
@@ -697,7 +703,7 @@ func (service *AuthServiceImpl) VerifyEmail(ctx context.Context, userID int64, c
 	now := time.Now().UTC()
 
 	err = service.trxService.WithTx(ctx, func(tx bob.Executor) error {
-		if err := service.emailVerificationRepo.MarkUsedWithExec(ctx, tx, otpRecord.ID); err != nil {
+		if err := service.otpRepository.MarkUsedWithExec(ctx, tx, otpRecord.ID); err != nil {
 			return err
 		}
 		setter := &models.UserSetter{

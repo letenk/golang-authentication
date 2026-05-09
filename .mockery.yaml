@@ -15,6 +15,12 @@ packages:
       outpkg: mocks
     interfaces:
       RefreshTokenRepository:
+  github.com/letenk/golang-authentication/internal/applications/otp/repository/db:
+    config:
+      dir: "{{.InterfaceDir}}/mocks"
+      outpkg: mocks
+    interfaces:
+      OTPRepository:
   github.com/letenk/golang-authentication/internal/applications/auth/service:
     config:
       dir: "{{.InterfaceDir}}/mocks"
