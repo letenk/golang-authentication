@@ -1,26 +1,30 @@
 package utils
 
 import (
-	"regexp"
-	"strings"
+	"github.com/letenk/golang-authentication/exceptions"
+	"github.com/nyaruka/phonenumbers"
 )
 
-// EnsurePhoneNumber ensures the phone number has Indonesian country code format (62)
-// Examples:
-//   - "08123456789" -> "628123456789"
-//   - "+628123456789" -> "628123456789"
-//   - "628123456789" -> "628123456789"
-//   - "008123456789" -> "628123456789"
-func EnsurePhoneNumber(number string) string {
-	// If already starts with 628, return as is
-	if strings.HasPrefix(number, "628") {
-		return number
+// NormalizePhoneNumber parses an international phone number and returns it in
+// E.164 format (e.g. "+628123456789"). The input must include a country code
+// prefix with a leading "+" — there is no default region, so callers in any
+// locale must provide a fully-qualified international number.
+//
+// Returns a ValidationError when the input is empty, missing the country code,
+// or fails libphonenumber's validity check.
+func NormalizePhoneNumber(number string) (string, error) {
+	if number == "" {
+		return "", exceptions.NewValidationError("phone", "phone number is required")
 	}
 
-	// Remove prefix +62, 62, or 0 from the beginning of the number
-	re := regexp.MustCompile(`^[+620]+`)
-	cleaned := re.ReplaceAllString(number, "")
+	parsed, err := phonenumbers.Parse(number, "")
+	if err != nil {
+		return "", exceptions.NewValidationError("phone", "invalid phone number format (must include country code, e.g. +62...)")
+	}
 
-	// Add prefix 62
-	return "62" + cleaned
+	if !phonenumbers.IsValidNumber(parsed) {
+		return "", exceptions.NewValidationError("phone", "invalid phone number")
+	}
+
+	return phonenumbers.Format(parsed, phonenumbers.E164), nil
 }

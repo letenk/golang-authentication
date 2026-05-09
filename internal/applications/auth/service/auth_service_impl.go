@@ -73,7 +73,10 @@ func (service *AuthServiceImpl) Register(ctx context.Context, param *dto.Paramet
 
 	// Check if phone already exists
 	if param.Phone != "" {
-		cleanedPhone := utils.EnsurePhoneNumber(param.Phone)
+		cleanedPhone, err := utils.NormalizePhoneNumber(param.Phone)
+		if err != nil {
+			return nil, err
+		}
 		param.Phone = cleanedPhone
 
 		existingUser, err := service.userRepository.FindByPhone(ctx, param.Phone)
@@ -156,7 +159,10 @@ func (service *AuthServiceImpl) Login(ctx context.Context, req *dto.LoginRequest
 	if req.Email != "" {
 		user, err = service.userRepository.FindByEmail(ctx, req.Email)
 	} else {
-		cleanedPhone := utils.EnsurePhoneNumber(req.Phone)
+		cleanedPhone, normErr := utils.NormalizePhoneNumber(req.Phone)
+		if normErr != nil {
+			return nil, exceptions.NewAuthenticationError("Invalid credentials", exceptions.AuthenticationInvalidCredentials)
+		}
 		user, err = service.userRepository.FindByPhone(ctx, cleanedPhone)
 	}
 
@@ -416,7 +422,10 @@ func (service *AuthServiceImpl) UpdateProfile(ctx context.Context, userID int64,
 	}
 
 	if req.Phone != "" {
-		cleanedPhone := utils.EnsurePhoneNumber(req.Phone)
+		cleanedPhone, err := utils.NormalizePhoneNumber(req.Phone)
+		if err != nil {
+			return nil, err
+		}
 		existingUser, err := service.userRepository.FindByPhone(ctx, cleanedPhone)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			log.Errorf("failed to check phone duplication for user %d: %s", userID, err)
