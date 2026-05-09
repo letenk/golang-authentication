@@ -141,7 +141,6 @@ func TestAuthController_Register(t *testing.T) {
 
 func TestAuthController_Login(t *testing.T) {
 	successResp := &dto.LoginResponse{
-		User:         &dto.UserResponse{ID: 1, Email: "test@example.com"},
 		AccessToken:  "access-token",
 		RefreshToken: "refresh-token",
 	}

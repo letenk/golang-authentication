@@ -177,11 +177,6 @@ func (service *AuthServiceImpl) Login(ctx context.Context, req *dto.LoginRequest
 	}
 
 	// Generate access token
-	email := ""
-	if user.Email.IsValue() {
-		email = user.Email.GetOrZero()
-	}
-
 	accessToken, accessExpiresAt, err := service.jwtConfig.GenerateAccessToken(user.ID)
 	if err != nil {
 		log.Errorf("failed to generate access token: %s", err)
@@ -214,17 +209,7 @@ func (service *AuthServiceImpl) Login(ctx context.Context, req *dto.LoginRequest
 		return nil, exceptions.NewBusinessLogicError(exceptions.DataCreateFailed, errors.New("failed to create refresh token"), nil)
 	}
 
-	// Build user response
-	userResp := &dto.UserResponse{
-		ID:         user.ID,
-		Email:      email,
-		FullName:   user.Name.GetOrZero(),
-		Phone:      user.Phone.GetOrZero(),
-		IsVerified: user.IsVerified.GetOrZero(),
-	}
-
 	return &dto.LoginResponse{
-		User:                  userResp,
 		AccessToken:           accessToken,
 		RefreshToken:          refreshToken,
 		AccessTokenExpiresAt:  accessExpiresAt.Format(time.RFC3339),
