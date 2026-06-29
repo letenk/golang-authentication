@@ -6,11 +6,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/aarondl/opt/null"
 	"github.com/labstack/echo/v4"
 	"github.com/letenk/golang-authentication/bob/models"
+	"github.com/letenk/golang-authentication/configs/credential"
 	customValidator "github.com/letenk/golang-authentication/configs/validator"
 	"github.com/letenk/golang-authentication/exceptions"
 	"github.com/letenk/golang-authentication/internal/applications/auth/controller"
@@ -20,6 +22,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
+
+func TestMain(m *testing.M) {
+	credential.Config = credential.NewAppConfig()
+	os.Exit(m.Run())
+}
 
 // --- Helpers ---
 
@@ -212,11 +219,12 @@ func TestAuthController_RefreshToken(t *testing.T) {
 	tests := []struct {
 		name       string
 		body       any
+		setupReq   func(req *http.Request)
 		setupMock  func(ms *authMocks.MockAuthService)
 		wantStatus int
 	}{
 		{
-			name: "success refresh token",
+			name: "success refresh token via body",
 			body: map[string]string{
 				"refresh_token": "550e8400-e29b-41d4-a716-446655440000",
 			},
@@ -226,10 +234,21 @@ func TestAuthController_RefreshToken(t *testing.T) {
 			wantStatus: http.StatusOK,
 		},
 		{
-			name:       "validation error - missing refresh token",
+			name: "success refresh token via cookie",
+			body: map[string]string{},
+			setupReq: func(req *http.Request) {
+				req.AddCookie(&http.Cookie{Name: "refresh_token", Value: "550e8400-e29b-41d4-a716-446655440000"})
+			},
+			setupMock: func(ms *authMocks.MockAuthService) {
+				ms.EXPECT().RefreshToken(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(successResp, nil)
+			},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "no token in body or cookie returns 401",
 			body:       map[string]string{},
 			setupMock:  func(ms *authMocks.MockAuthService) {},
-			wantStatus: http.StatusBadRequest,
+			wantStatus: http.StatusUnauthorized,
 		},
 		{
 			name: "token revoked",
@@ -262,6 +281,9 @@ func TestAuthController_RefreshToken(t *testing.T) {
 
 			req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", jsonBody(t, tt.body))
 			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			if tt.setupReq != nil {
+				tt.setupReq(req)
+			}
 			rec := httptest.NewRecorder()
 
 			e.ServeHTTP(rec, req)
@@ -277,11 +299,12 @@ func TestAuthController_Logout(t *testing.T) {
 	tests := []struct {
 		name       string
 		body       any
+		setupReq   func(req *http.Request)
 		setupMock  func(ms *authMocks.MockAuthService)
 		wantStatus int
 	}{
 		{
-			name: "success logout",
+			name: "success logout via body",
 			body: map[string]string{
 				"refresh_token": "550e8400-e29b-41d4-a716-446655440000",
 			},
@@ -291,10 +314,21 @@ func TestAuthController_Logout(t *testing.T) {
 			wantStatus: http.StatusOK,
 		},
 		{
-			name:       "validation error - missing refresh token",
+			name: "success logout via cookie",
+			body: map[string]string{},
+			setupReq: func(req *http.Request) {
+				req.AddCookie(&http.Cookie{Name: "refresh_token", Value: "550e8400-e29b-41d4-a716-446655440000"})
+			},
+			setupMock: func(ms *authMocks.MockAuthService) {
+				ms.EXPECT().Logout(mock.Anything, mock.Anything).Return(nil)
+			},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "no token in body or cookie returns 401",
 			body:       map[string]string{},
 			setupMock:  func(ms *authMocks.MockAuthService) {},
-			wantStatus: http.StatusBadRequest,
+			wantStatus: http.StatusUnauthorized,
 		},
 		{
 			name: "token already revoked",
@@ -317,6 +351,9 @@ func TestAuthController_Logout(t *testing.T) {
 
 			req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", jsonBody(t, tt.body))
 			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			if tt.setupReq != nil {
+				tt.setupReq(req)
+			}
 			rec := httptest.NewRecorder()
 
 			e.ServeHTTP(rec, req)

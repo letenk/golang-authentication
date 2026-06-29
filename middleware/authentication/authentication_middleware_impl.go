@@ -9,6 +9,7 @@ import (
 
 	"github.com/letenk/golang-authentication/exceptions"
 	"github.com/letenk/golang-authentication/internal/applications/authentication/service"
+	"github.com/letenk/golang-authentication/internal/helper"
 	"github.com/letenk/golang-authentication/internal/utils/headers"
 )
 
@@ -33,14 +34,22 @@ func (impl *AuthenticationMiddlewareImpl) Authenticate(required bool) echo.Middl
 				return err
 			}
 
+			var token string
 			if header.Authorization != nil {
-				claim, userId, err := impl.service.ClaimUser(*header.Authorization)
+				token = *header.Authorization
+			} else if cookieToken := helper.GetAccessTokenFromCookie(ctx); cookieToken != "" {
+				// Cookie stores raw JWT; ClaimUser expects "Bearer <jwt>" format.
+				token = "Bearer " + cookieToken
+			}
+
+			if token != "" {
+				claim, userId, err := impl.service.ClaimUser(token)
 				if err != nil {
 					err := exceptions.NewAuthenticationError(
 						err.Error(),
-						exceptions.AuthenticationBadFormat,
+						exceptions.AuthenticationInvalidToken,
 					)
-					log.Errorf("failed to claim user - invalid Authorization token: %s", err)
+					log.Errorf("failed to claim user - invalid token: %s", err)
 					return err
 				}
 

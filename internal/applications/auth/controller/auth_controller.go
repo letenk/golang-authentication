@@ -2,6 +2,7 @@ package controller
 
 import (
 	"github.com/labstack/echo/v4"
+	"github.com/letenk/golang-authentication/exceptions"
 	"github.com/letenk/golang-authentication/internal/applications/auth/dto"
 	"github.com/letenk/golang-authentication/internal/applications/auth/service"
 	"github.com/letenk/golang-authentication/internal/helper"
@@ -84,15 +85,23 @@ func (controller *AuthController) Login(ctx echo.Context) error {
 		return err
 	}
 
+	helper.SetAuthCookies(ctx, result.AccessToken, result.RefreshToken)
+
 	return response.SuccessWithMessage(ctx, "Login successful", result)
 }
 
 func (controller *AuthController) RefreshToken(ctx echo.Context) error {
 	request := &dto.RefreshTokenRequest{}
 
-	err := helper.BindAndValidate(ctx, request)
-	if err != nil {
-		return err
+	// Body is optional: the refresh token may arrive as an HttpOnly cookie
+	// when the web client can't read it from JS to put it in the body.
+	helper.BindAndValidate(ctx, request)
+
+	if request.RefreshToken == "" {
+		request.RefreshToken = helper.GetRefreshTokenFromCookie(ctx)
+	}
+	if request.RefreshToken == "" {
+		return exceptions.NewAuthenticationError("refresh token is required", exceptions.AuthenticationInvalidToken)
 	}
 
 	ipAddress := ctx.RealIP()
@@ -103,21 +112,31 @@ func (controller *AuthController) RefreshToken(ctx echo.Context) error {
 		return err
 	}
 
+	helper.SetAuthCookies(ctx, result.AccessToken, result.RefreshToken)
+
 	return response.SuccessWithMessage(ctx, "Token refreshed successfully", result)
 }
 
 func (controller *AuthController) Logout(ctx echo.Context) error {
 	request := &dto.LogoutRequest{}
 
-	err := helper.BindAndValidate(ctx, request)
+	// Body is optional: the refresh token may arrive as an HttpOnly cookie.
+	helper.BindAndValidate(ctx, request)
+
+	refreshToken := request.RefreshToken
+	if refreshToken == "" {
+		refreshToken = helper.GetRefreshTokenFromCookie(ctx)
+	}
+	if refreshToken == "" {
+		return exceptions.NewAuthenticationError("refresh token is required", exceptions.AuthenticationInvalidToken)
+	}
+
+	err := controller.authService.Logout(ctx.Request().Context(), refreshToken)
 	if err != nil {
 		return err
 	}
 
-	err = controller.authService.Logout(ctx.Request().Context(), request.RefreshToken)
-	if err != nil {
-		return err
-	}
+	helper.ClearAuthCookies(ctx)
 
 	return response.SuccessWithMessage(ctx, "Logged out successfully", &dto.LogoutResponse{
 		Message: "Logged out successfully",
@@ -134,6 +153,8 @@ func (controller *AuthController) LogoutAll(ctx echo.Context) error {
 	if err != nil {
 		return err
 	}
+
+	helper.ClearAuthCookies(ctx)
 
 	return response.SuccessWithMessage(ctx, "Logged out from all devices successfully", &dto.LogoutAllResponse{
 		Message:             "Logged out from all devices successfully",
