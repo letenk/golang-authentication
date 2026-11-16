@@ -5,8 +5,6 @@ package mocks
 import (
 	context "context"
 
-	bob "github.com/stephenafamo/bob"
-
 	mock "github.com/stretchr/testify/mock"
 
 	models "github.com/letenk/golang-authentication/bob/models"
@@ -369,17 +367,17 @@ func (_c *MockUserRepository_UpdateByID_Call) RunAndReturn(run func(context.Cont
 	return _c
 }
 
-// UpdatePasswordWithExec provides a mock function with given fields: ctx, exec, userID, hashedPassword
-func (_m *MockUserRepository) UpdatePasswordWithExec(ctx context.Context, exec bob.Executor, userID int64, hashedPassword string) error {
-	ret := _m.Called(ctx, exec, userID, hashedPassword)
+// UpdatePassword provides a mock function with given fields: ctx, userID, hashedPassword
+func (_m *MockUserRepository) UpdatePassword(ctx context.Context, userID int64, hashedPassword string) error {
+	ret := _m.Called(ctx, userID, hashedPassword)
 
 	if len(ret) == 0 {
-		panic("no return value specified for UpdatePasswordWithExec")
+		panic("no return value specified for UpdatePassword")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, bob.Executor, int64, string) error); ok {
-		r0 = rf(ctx, exec, userID, hashedPassword)
+	if rf, ok := ret.Get(0).(func(context.Context, int64, string) error); ok {
+		r0 = rf(ctx, userID, hashedPassword)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -387,33 +385,32 @@ func (_m *MockUserRepository) UpdatePasswordWithExec(ctx context.Context, exec b
 	return r0
 }
 
-// MockUserRepository_UpdatePasswordWithExec_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdatePasswordWithExec'
-type MockUserRepository_UpdatePasswordWithExec_Call struct {
+// MockUserRepository_UpdatePassword_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdatePassword'
+type MockUserRepository_UpdatePassword_Call struct {
 	*mock.Call
 }
 
-// UpdatePasswordWithExec is a helper method to define mock.On call
+// UpdatePassword is a helper method to define mock.On call
 //   - ctx context.Context
-//   - exec bob.Executor
 //   - userID int64
 //   - hashedPassword string
-func (_e *MockUserRepository_Expecter) UpdatePasswordWithExec(ctx interface{}, exec interface{}, userID interface{}, hashedPassword interface{}) *MockUserRepository_UpdatePasswordWithExec_Call {
-	return &MockUserRepository_UpdatePasswordWithExec_Call{Call: _e.mock.On("UpdatePasswordWithExec", ctx, exec, userID, hashedPassword)}
+func (_e *MockUserRepository_Expecter) UpdatePassword(ctx interface{}, userID interface{}, hashedPassword interface{}) *MockUserRepository_UpdatePassword_Call {
+	return &MockUserRepository_UpdatePassword_Call{Call: _e.mock.On("UpdatePassword", ctx, userID, hashedPassword)}
 }
 
-func (_c *MockUserRepository_UpdatePasswordWithExec_Call) Run(run func(ctx context.Context, exec bob.Executor, userID int64, hashedPassword string)) *MockUserRepository_UpdatePasswordWithExec_Call {
+func (_c *MockUserRepository_UpdatePassword_Call) Run(run func(ctx context.Context, userID int64, hashedPassword string)) *MockUserRepository_UpdatePassword_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(bob.Executor), args[2].(int64), args[3].(string))
+		run(args[0].(context.Context), args[1].(int64), args[2].(string))
 	})
 	return _c
 }
 
-func (_c *MockUserRepository_UpdatePasswordWithExec_Call) Return(_a0 error) *MockUserRepository_UpdatePasswordWithExec_Call {
+func (_c *MockUserRepository_UpdatePassword_Call) Return(_a0 error) *MockUserRepository_UpdatePassword_Call {
 	_c.Call.Return(_a0)
 	return _c
 }
 
-func (_c *MockUserRepository_UpdatePasswordWithExec_Call) RunAndReturn(run func(context.Context, bob.Executor, int64, string) error) *MockUserRepository_UpdatePasswordWithExec_Call {
+func (_c *MockUserRepository_UpdatePassword_Call) RunAndReturn(run func(context.Context, int64, string) error) *MockUserRepository_UpdatePassword_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -5,7 +5,6 @@ package mocks
 import (
 	context "context"
 
-	bob "github.com/stephenafamo/bob"
 	mock "github.com/stretchr/testify/mock"
 )
 
@@ -23,7 +22,7 @@ func (_m *MockTrxService) EXPECT() *MockTrxService_Expecter {
 }
 
 // WithTx provides a mock function with given fields: ctx, fn
-func (_m *MockTrxService) WithTx(ctx context.Context, fn func(tx bob.Executor) error) error {
+func (_m *MockTrxService) WithTx(ctx context.Context, fn func(context.Context) error) error {
 	ret := _m.Called(ctx, fn)
 
 	if len(ret) == 0 {
@@ -31,7 +30,7 @@ func (_m *MockTrxService) WithTx(ctx context.Context, fn func(tx bob.Executor) e
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, func(bob.Executor) error) error); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, func(context.Context) error) error); ok {
 		r0 = rf(ctx, fn)
 	} else {
 		r0 = ret.Error(0)
@@ -47,14 +46,14 @@ type MockTrxService_WithTx_Call struct {
 
 // WithTx is a helper method to define mock.On call
 //   - ctx context.Context
-//   - fn func(tx bob.Executor) error
+//   - fn func(context.Context) error
 func (_e *MockTrxService_Expecter) WithTx(ctx interface{}, fn interface{}) *MockTrxService_WithTx_Call {
 	return &MockTrxService_WithTx_Call{Call: _e.mock.On("WithTx", ctx, fn)}
 }
 
-func (_c *MockTrxService_WithTx_Call) Run(run func(ctx context.Context, fn func(bob.Executor) error)) *MockTrxService_WithTx_Call {
+func (_c *MockTrxService_WithTx_Call) Run(run func(ctx context.Context, fn func(context.Context) error)) *MockTrxService_WithTx_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(func(bob.Executor) error))
+		run(args[0].(context.Context), args[1].(func(context.Context) error))
 	})
 	return _c
 }
@@ -64,7 +63,7 @@ func (_c *MockTrxService_WithTx_Call) Return(_a0 error) *MockTrxService_WithTx_C
 	return _c
 }
 
-func (_c *MockTrxService_WithTx_Call) RunAndReturn(run func(context.Context, func(bob.Executor) error) error) *MockTrxService_WithTx_Call {
+func (_c *MockTrxService_WithTx_Call) RunAndReturn(run func(context.Context, func(context.Context) error) error) *MockTrxService_WithTx_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -8,7 +8,6 @@ import (
 	"github.com/aarondl/opt/omitnull"
 	"github.com/letenk/golang-authentication/bob/models"
 	"github.com/letenk/golang-authentication/configs/database"
-	"github.com/stephenafamo/bob"
 )
 
 type OTPRepositoryImpl struct {
@@ -20,35 +19,6 @@ func NewOTPRepository(db *database.BobDB) *OTPRepositoryImpl {
 }
 
 func (r *OTPRepositoryImpl) Create(ctx context.Context, params CreateOTPParams) (*models.Otp, error) {
-	return r.CreateWithExec(ctx, r.db.Exec, params)
-}
-
-func (r *OTPRepositoryImpl) FindValidByUserAndCode(ctx context.Context, userID int64, purpose OTPPurpose, code string) (*models.Otp, error) {
-	now := time.Now().UTC()
-
-	otp, err := models.Otps.Query(
-		models.SelectWhere.Otps.UserID.EQ(userID),
-		models.SelectWhere.Otps.Purpose.EQ(string(purpose)),
-		models.SelectWhere.Otps.Code.EQ(code),
-		models.SelectWhere.Otps.ExpiresAt.GT(now),
-		models.SelectWhere.Otps.UsedAt.IsNull(),
-	).One(ctx, r.db.Exec)
-	if err != nil {
-		return nil, err
-	}
-
-	return otp, nil
-}
-
-func (r *OTPRepositoryImpl) MarkUsed(ctx context.Context, id int64) error {
-	return r.MarkUsedWithExec(ctx, r.db.Exec, id)
-}
-
-func (r *OTPRepositoryImpl) InvalidatePreviousByUserIDAndPurpose(ctx context.Context, userID int64, purpose OTPPurpose) error {
-	return r.InvalidatePreviousByUserIDAndPurposeWithExec(ctx, r.db.Exec, userID, purpose)
-}
-
-func (r *OTPRepositoryImpl) CreateWithExec(ctx context.Context, exec bob.Executor, params CreateOTPParams) (*models.Otp, error) {
 	setter := &models.OtpSetter{
 		UserID:    omit.From(params.UserID),
 		Code:      omit.From(params.Code),
@@ -57,15 +27,22 @@ func (r *OTPRepositoryImpl) CreateWithExec(ctx context.Context, exec bob.Executo
 		CreatedAt: omitnull.From(time.Now().UTC()),
 	}
 
-	result, err := models.Otps.Insert(setter).One(ctx, exec)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return models.Otps.Insert(setter).One(ctx, r.db.BobExec(ctx))
 }
 
-func (r *OTPRepositoryImpl) MarkUsedWithExec(ctx context.Context, exec bob.Executor, id int64) error {
+func (r *OTPRepositoryImpl) FindValidByUserAndCode(ctx context.Context, userID int64, purpose OTPPurpose, code string) (*models.Otp, error) {
+	now := time.Now().UTC()
+
+	return models.Otps.Query(
+		models.SelectWhere.Otps.UserID.EQ(userID),
+		models.SelectWhere.Otps.Purpose.EQ(string(purpose)),
+		models.SelectWhere.Otps.Code.EQ(code),
+		models.SelectWhere.Otps.ExpiresAt.GT(now),
+		models.SelectWhere.Otps.UsedAt.IsNull(),
+	).One(ctx, r.db.BobExec(ctx))
+}
+
+func (r *OTPRepositoryImpl) MarkUsed(ctx context.Context, id int64) error {
 	setter := &models.OtpSetter{
 		UsedAt: omitnull.From(time.Now().UTC()),
 	}
@@ -73,12 +50,12 @@ func (r *OTPRepositoryImpl) MarkUsedWithExec(ctx context.Context, exec bob.Execu
 	_, err := models.Otps.Update(
 		models.UpdateWhere.Otps.ID.EQ(id),
 		setter.UpdateMod(),
-	).One(ctx, exec)
+	).One(ctx, r.db.BobExec(ctx))
 
 	return err
 }
 
-func (r *OTPRepositoryImpl) InvalidatePreviousByUserIDAndPurposeWithExec(ctx context.Context, exec bob.Executor, userID int64, purpose OTPPurpose) error {
+func (r *OTPRepositoryImpl) InvalidatePreviousByUserIDAndPurpose(ctx context.Context, userID int64, purpose OTPPurpose) error {
 	setter := &models.OtpSetter{
 		UsedAt: omitnull.From(time.Now().UTC()),
 	}
@@ -88,7 +65,7 @@ func (r *OTPRepositoryImpl) InvalidatePreviousByUserIDAndPurposeWithExec(ctx con
 		models.UpdateWhere.Otps.Purpose.EQ(string(purpose)),
 		models.UpdateWhere.Otps.UsedAt.IsNull(),
 		setter.UpdateMod(),
-	).Exec(ctx, exec)
+	).Exec(ctx, r.db.BobExec(ctx))
 
 	return err
 }

@@ -8,7 +8,6 @@ import (
 	"github.com/aarondl/opt/omitnull"
 	"github.com/letenk/golang-authentication/bob/models"
 	"github.com/letenk/golang-authentication/configs/database"
-	"github.com/stephenafamo/bob"
 )
 
 
@@ -35,7 +34,7 @@ func (r *UserRepositoryImpl) Create(ctx context.Context, entity *models.UserSett
 		entity.UpdatedBy = omit.From(int64(1)) // Default value for system user
 	}
 
-	user, err := models.Users.Insert(entity).One(ctx, r.db.Exec)
+	user, err := models.Users.Insert(entity).One(ctx, r.db.BobExec(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -47,7 +46,7 @@ func (r *UserRepositoryImpl) FindByEmail(ctx context.Context, email string) (*mo
 	user, err := models.Users.Query(
 		models.SelectWhere.Users.Email.EQ(email),
 		models.SelectWhere.Users.DeletedAt.IsNull(),
-	).One(ctx, r.db.Exec)
+	).One(ctx, r.db.BobExec(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +58,7 @@ func (r *UserRepositoryImpl) FindByPhone(ctx context.Context, phone string) (*mo
 	user, err := models.Users.Query(
 		models.SelectWhere.Users.Phone.EQ(phone),
 		models.SelectWhere.Users.DeletedAt.IsNull(),
-	).One(ctx, r.db.Exec)
+	).One(ctx, r.db.BobExec(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +70,7 @@ func (r *UserRepositoryImpl) FindByID(ctx context.Context, id int64) (*models.Us
 	user, err := models.Users.Query(
 		models.SelectWhere.Users.ID.EQ(id),
 		models.SelectWhere.Users.DeletedAt.IsNull(),
-	).One(ctx, r.db.Exec)
+	).One(ctx, r.db.BobExec(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +85,7 @@ func (r *UserRepositoryImpl) UpdateByID(ctx context.Context, id int64, setter *m
 		models.UpdateWhere.Users.ID.EQ(id),
 		models.UpdateWhere.Users.DeletedAt.IsNull(),
 		setter.UpdateMod(),
-	).One(ctx, r.db.Exec)
+	).One(ctx, r.db.BobExec(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +93,7 @@ func (r *UserRepositoryImpl) UpdateByID(ctx context.Context, id int64, setter *m
 	return user, nil
 }
 
-func (r *UserRepositoryImpl) UpdatePasswordWithExec(ctx context.Context, exec bob.Executor, userID int64, hashedPassword string) error {
+func (r *UserRepositoryImpl) UpdatePassword(ctx context.Context, userID int64, hashedPassword string) error {
 	setter := &models.UserSetter{
 		Password:  omit.From(hashedPassword),
 		UpdatedAt: omitnull.From(time.Now().UTC()),
@@ -105,7 +104,7 @@ func (r *UserRepositoryImpl) UpdatePasswordWithExec(ctx context.Context, exec bo
 		models.UpdateWhere.Users.ID.EQ(userID),
 		models.UpdateWhere.Users.DeletedAt.IsNull(),
 		setter.UpdateMod(),
-	).One(ctx, exec)
+	).One(ctx, r.db.BobExec(ctx))
 
 	return err
 }
@@ -124,7 +123,7 @@ func (r *UserRepositoryImpl) SoftDeleteByID(ctx context.Context, id int64, delet
 		models.UpdateWhere.Users.ID.EQ(id),
 		models.UpdateWhere.Users.DeletedAt.IsNull(),
 		setter.UpdateMod(),
-	).One(ctx, r.db.Exec)
+	).One(ctx, r.db.BobExec(ctx))
 
 	return err
 }
