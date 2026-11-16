@@ -2,13 +2,10 @@ package service_test
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"testing"
 	"time"
 
-	"github.com/aarondl/opt/null"
-	"github.com/letenk/golang-authentication/bob/models"
 	"github.com/letenk/golang-authentication/configs/credential"
 	"github.com/letenk/golang-authentication/configs/jwt_config"
 	"github.com/letenk/golang-authentication/exceptions"
@@ -76,23 +73,24 @@ func newTestUser(id int64, email, phone, hashedPassword string) *domain.User {
 	return u
 }
 
-func newActiveToken(userID int64, token string) *models.RefreshToken {
-	return &models.RefreshToken{
+func newActiveToken(userID int64, token string) *domain.RefreshToken {
+	return &domain.RefreshToken{
 		ID:         1,
 		UserID:     userID,
 		Token:      token,
-		DeviceName: null.From("Test Device"),
+		DeviceName: "Test Device",
 		ExpiresAt:  time.Now().Add(7 * 24 * time.Hour),
 	}
 }
 
-func newRevokedToken(userID int64, token string) *models.RefreshToken {
+func newRevokedToken(userID int64, token string) *domain.RefreshToken {
 	rt := newActiveToken(userID, token)
-	rt.RevokedAt = null.From(time.Now())
+	revokedAt := time.Now()
+	rt.RevokedAt = &revokedAt
 	return rt
 }
 
-func newExpiredToken(userID int64, token string) *models.RefreshToken {
+func newExpiredToken(userID int64, token string) *domain.RefreshToken {
 	rt := newActiveToken(userID, token)
 	rt.ExpiresAt = time.Now().Add(-1 * time.Hour)
 	return rt
@@ -243,7 +241,7 @@ func TestAuthService_Login(t *testing.T) {
 			},
 			setupMock: func(mu *userMocks.MockUserRepository, mt *refreshMocks.MockRefreshTokenRepository) {
 				mu.EXPECT().FindByEmail(mock.Anything, "test@example.com").Return(newTestUser(1, "test@example.com", "", hashedPassword), nil)
-				mt.EXPECT().Create(mock.Anything, mock.Anything).Return(&models.RefreshToken{}, nil)
+				mt.EXPECT().Create(mock.Anything, mock.Anything).Return(&domain.RefreshToken{}, nil)
 			},
 			wantErr: false,
 		},
@@ -255,7 +253,7 @@ func TestAuthService_Login(t *testing.T) {
 			},
 			setupMock: func(mu *userMocks.MockUserRepository, mt *refreshMocks.MockRefreshTokenRepository) {
 				mu.EXPECT().FindByPhone(mock.Anything, "+628123456789").Return(newTestUser(1, "", "+628123456789", hashedPassword), nil)
-				mt.EXPECT().Create(mock.Anything, mock.Anything).Return(&models.RefreshToken{}, nil)
+				mt.EXPECT().Create(mock.Anything, mock.Anything).Return(&domain.RefreshToken{}, nil)
 			},
 			wantErr: false,
 		},
@@ -332,14 +330,14 @@ func TestAuthService_RefreshToken(t *testing.T) {
 			setupMock: func(mt *refreshMocks.MockRefreshTokenRepository) {
 				mt.EXPECT().FindByToken(mock.Anything, oldToken).Return(newActiveToken(1, oldToken), nil)
 				mt.EXPECT().ReplaceToken(mock.Anything, oldToken, mock.Anything).Return(nil)
-				mt.EXPECT().Create(mock.Anything, mock.Anything).Return(&models.RefreshToken{}, nil)
+				mt.EXPECT().Create(mock.Anything, mock.Anything).Return(&domain.RefreshToken{}, nil)
 			},
 			wantErr: false,
 		},
 		{
 			name: "token not found",
 			setupMock: func(mt *refreshMocks.MockRefreshTokenRepository) {
-				mt.EXPECT().FindByToken(mock.Anything, oldToken).Return(nil, sql.ErrNoRows)
+				mt.EXPECT().FindByToken(mock.Anything, oldToken).Return(nil, domain.ErrNotFound)
 			},
 			wantErr: true,
 			checkErr: func(t *testing.T, err error) {
@@ -370,6 +368,22 @@ func TestAuthService_RefreshToken(t *testing.T) {
 				var authErr *exceptions.AuthenticationError
 				assert.True(t, errors.As(err, &authErr))
 				assert.Equal(t, exceptions.AuthenticationTokenExpired, authErr.Code)
+			},
+		},
+		{
+			// Another request rotated the same token between FindByToken and
+			// ReplaceToken. No new token may be issued (the strict mock fails
+			// on an unexpected Create call).
+			name: "token rotated concurrently",
+			setupMock: func(mt *refreshMocks.MockRefreshTokenRepository) {
+				mt.EXPECT().FindByToken(mock.Anything, oldToken).Return(newActiveToken(1, oldToken), nil)
+				mt.EXPECT().ReplaceToken(mock.Anything, oldToken, mock.Anything).Return(domain.ErrNotFound)
+			},
+			wantErr: true,
+			checkErr: func(t *testing.T, err error) {
+				var authErr *exceptions.AuthenticationError
+				assert.True(t, errors.As(err, &authErr))
+				assert.Equal(t, exceptions.AuthenticationTokenRevoked, authErr.Code)
 			},
 		},
 	}
@@ -420,7 +434,7 @@ func TestAuthService_Logout(t *testing.T) {
 		{
 			name: "token not found",
 			setupMock: func(mt *refreshMocks.MockRefreshTokenRepository) {
-				mt.EXPECT().FindByToken(mock.Anything, token).Return(nil, sql.ErrNoRows)
+				mt.EXPECT().FindByToken(mock.Anything, token).Return(nil, domain.ErrNotFound)
 			},
 			wantErr: true,
 			checkErr: func(t *testing.T, err error) {

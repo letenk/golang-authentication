@@ -6,10 +6,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/aarondl/opt/omit"
-	"github.com/aarondl/opt/omitnull"
 	"github.com/labstack/gommon/log"
-	"github.com/letenk/golang-authentication/bob/models"
 	"github.com/letenk/golang-authentication/configs/credential"
 	"github.com/letenk/golang-authentication/configs/jwt_config"
 	"github.com/letenk/golang-authentication/exceptions"
@@ -182,18 +179,15 @@ func (service *AuthServiceImpl) Login(ctx context.Context, req *dto.LoginRequest
 		deviceName = "Unknown Device"
 	}
 
-	// Create refresh token record using Setter
-	tokenSetter := &models.RefreshTokenSetter{
-		UserID:     omit.From(user.ID),
-		Token:      omit.From(refreshToken),
-		DeviceName: omitnull.From(deviceName),
-		DeviceID:   omitnull.From(req.DeviceID),
-		IPAddress:  omitnull.From(ipAddress),
-		UserAgent:  omitnull.From(userAgent),
-		ExpiresAt:  omit.From(refreshExpiresAt),
-	}
-
-	_, err = service.tokenRepository.Create(ctx, tokenSetter)
+	_, err = service.tokenRepository.Create(ctx, refreshTokenRepo.CreateRefreshTokenParams{
+		UserID:     user.ID,
+		Token:      refreshToken,
+		DeviceName: deviceName,
+		DeviceID:   req.DeviceID,
+		IPAddress:  ipAddress,
+		UserAgent:  userAgent,
+		ExpiresAt:  refreshExpiresAt,
+	})
 	if err != nil {
 		log.Errorf("failed to create refresh token: %s", err)
 		return nil, exceptions.NewBusinessLogicError(exceptions.DataCreateFailed, errors.New("failed to create refresh token"), nil)
@@ -212,7 +206,7 @@ func (service *AuthServiceImpl) RefreshToken(ctx context.Context, req *dto.Refre
 	// Find the token in DB
 	token, err := service.tokenRepository.FindByToken(ctx, req.RefreshToken)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, domain.ErrNotFound) {
 			return nil, exceptions.NewAuthenticationError("Invalid refresh token", exceptions.AuthenticationInvalidToken)
 		}
 		log.Errorf("failed to find refresh token: %s", err)
@@ -220,12 +214,12 @@ func (service *AuthServiceImpl) RefreshToken(ctx context.Context, req *dto.Refre
 	}
 
 	// Check if already revoked
-	if token.RevokedAt.IsValue() {
+	if token.IsRevoked() {
 		return nil, exceptions.NewAuthenticationError("Refresh token has been revoked", exceptions.AuthenticationTokenRevoked)
 	}
 
 	// Check if expired
-	if token.ExpiresAt.Before(time.Now().UTC()) {
+	if token.IsExpired(time.Now().UTC()) {
 		return nil, exceptions.NewAuthenticationError("Refresh token has expired", exceptions.AuthenticationTokenExpired)
 	}
 
@@ -239,30 +233,32 @@ func (service *AuthServiceImpl) RefreshToken(ctx context.Context, req *dto.Refre
 	// Generate new refresh token
 	newRefreshToken, refreshExpiresAt := service.jwtConfig.GenerateRefreshToken()
 
-	// Token rotation: revoke old token and record which token replaced it
+	// Token rotation: revoke old token and record which token replaced it.
+	// ErrNotFound means a concurrent request already rotated this token.
 	err = service.tokenRepository.ReplaceToken(ctx, req.RefreshToken, newRefreshToken)
 	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, exceptions.NewAuthenticationError("Refresh token has been revoked", exceptions.AuthenticationTokenRevoked)
+		}
 		log.Errorf("failed to rotate refresh token: %s", err)
 		return nil, exceptions.NewBusinessLogicError(exceptions.DataUpdateFailed, errors.New("failed to rotate refresh token"), nil)
 	}
 
 	// Create new refresh token — carry over device info from the old token
-	deviceName := token.DeviceName.GetOrZero()
+	deviceName := token.DeviceName
 	if deviceName == "" {
 		deviceName = "Unknown Device"
 	}
 
-	tokenSetter := &models.RefreshTokenSetter{
-		UserID:     omit.From(token.UserID),
-		Token:      omit.From(newRefreshToken),
-		DeviceName: omitnull.From(deviceName),
-		DeviceID:   omitnull.From(token.DeviceID.GetOrZero()),
-		IPAddress:  omitnull.From(ipAddress),
-		UserAgent:  omitnull.From(userAgent),
-		ExpiresAt:  omit.From(refreshExpiresAt),
-	}
-
-	_, err = service.tokenRepository.Create(ctx, tokenSetter)
+	_, err = service.tokenRepository.Create(ctx, refreshTokenRepo.CreateRefreshTokenParams{
+		UserID:     token.UserID,
+		Token:      newRefreshToken,
+		DeviceName: deviceName,
+		DeviceID:   token.DeviceID,
+		IPAddress:  ipAddress,
+		UserAgent:  userAgent,
+		ExpiresAt:  refreshExpiresAt,
+	})
 	if err != nil {
 		log.Errorf("failed to create new refresh token: %s", err)
 		return nil, exceptions.NewBusinessLogicError(exceptions.DataCreateFailed, errors.New("failed to create new refresh token"), nil)
@@ -281,7 +277,7 @@ func (service *AuthServiceImpl) Logout(ctx context.Context, refreshToken string)
 	// Find the token
 	token, err := service.tokenRepository.FindByToken(ctx, refreshToken)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, domain.ErrNotFound) {
 			return exceptions.NewAuthenticationError("Invalid refresh token", exceptions.AuthenticationInvalidToken)
 		}
 		log.Errorf("failed to find refresh token: %s", err)
@@ -289,7 +285,7 @@ func (service *AuthServiceImpl) Logout(ctx context.Context, refreshToken string)
 	}
 
 	// Check if already revoked
-	if token.RevokedAt.IsValue() {
+	if token.IsRevoked() {
 		return exceptions.NewAuthenticationError("Refresh token has already been revoked", exceptions.AuthenticationTokenRevoked)
 	}
 
@@ -365,14 +361,14 @@ func (service *AuthServiceImpl) GetSessions(ctx context.Context, userID int64) (
 	for _, t := range tokens {
 		session := &dto.ActiveSessionResponse{
 			ID:         t.ID,
-			DeviceName: t.DeviceName.GetOrZero(),
-			DeviceID:   t.DeviceID.GetOrZero(),
-			IPAddress:  t.IPAddress.GetOrZero(),
-			UserAgent:  t.UserAgent.GetOrZero(),
+			DeviceName: t.DeviceName,
+			DeviceID:   t.DeviceID,
+			IPAddress:  t.IPAddress,
+			UserAgent:  t.UserAgent,
 		}
-		if t.CreatedAt.IsValue() {
-			session.CreatedAt = t.CreatedAt.GetOrZero().UTC().Format(time.RFC3339)
-			session.LastUsed = t.CreatedAt.GetOrZero().UTC().Format(time.RFC3339)
+		if !t.CreatedAt.IsZero() {
+			session.CreatedAt = t.CreatedAt.UTC().Format(time.RFC3339)
+			session.LastUsed = t.CreatedAt.UTC().Format(time.RFC3339)
 		}
 		sessions = append(sessions, session)
 	}
@@ -459,7 +455,7 @@ func (service *AuthServiceImpl) UpdatePassword(ctx context.Context, userID int64
 func (service *AuthServiceImpl) RevokeSession(ctx context.Context, userID int64, sessionID int64) error {
 	err := service.tokenRepository.RevokeByIDForUser(ctx, sessionID, userID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, domain.ErrNotFound) {
 			return exceptions.NewBusinessLogicError(exceptions.DataNotFound, errors.New("session not found"), nil)
 		}
 		log.Errorf("failed to revoke session %d for user %d: %s", sessionID, userID, err)
