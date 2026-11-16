@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"time"
 
 	"github.com/letenk/golang-authentication/configs/database"
 	"github.com/letenk/golang-authentication/db/sqlcgen"
@@ -81,14 +80,7 @@ func toDomainOTP(o sqlcgen.Otp) *domain.OTP {
 		Code:      o.Code,
 		Purpose:   o.Purpose,
 		ExpiresAt: o.ExpiresAt,
-		UsedAt:    nullTimePtr(o.UsedAt),
+		UsedAt:    database.TimePtr(o.UsedAt),
 		CreatedAt: o.CreatedAt.Time, // zero when NULL
 	}
-}
-
-func nullTimePtr(t sql.NullTime) *time.Time {
-	if !t.Valid {
-		return nil
-	}
-	return &t.Time
 }
