@@ -630,3 +630,78 @@ func TestAuthService_ForgotPassword_UnknownEmailIsSilent(t *testing.T) {
 
 	assert.NoError(t, err, "must not reveal whether the email exists")
 }
+
+// --- Transactional bodies ---
+//
+// newTestServiceRunningTx returns a service whose TrxService mock actually runs
+// the WithTx closure, passing a context tagged with txMarker. Repository
+// expectations use inTx to assert the call received the transaction context.
+
+type txMarker struct{}
+
+var inTx = mock.MatchedBy(func(ctx context.Context) bool {
+	marked, _ := ctx.Value(txMarker{}).(bool)
+	return marked
+})
+
+func newTestServiceRunningTx(t *testing.T) (*service.AuthServiceImpl, *userMocks.MockUserRepository, *otpRepoMocks.MockOTPRepository) {
+	t.Helper()
+	mockUser := userMocks.NewMockUserRepository(t)
+	mockOTP := otpRepoMocks.NewMockOTPRepository(t)
+	mockTrx := trxMocks.NewMockTrxService(t)
+	mockTrx.EXPECT().WithTx(mock.Anything, mock.Anything).RunAndReturn(
+		func(ctx context.Context, fn func(context.Context) error) error {
+			return fn(context.WithValue(ctx, txMarker{}, true))
+		})
+
+	svc := service.NewAuthService(mockTrx, mockUser, refreshMocks.NewMockRefreshTokenRepository(t), mockOTP,
+		emailSvcMocks.NewMockEmailService(t), newTestJWTConfig(t), &credential.OTPConfig{Expire: "5m", Length: 6})
+	return svc, mockUser, mockOTP
+}
+
+func TestAuthService_ResetPassword_WritesInsideTx(t *testing.T) {
+	svc, mu, mo := newTestServiceRunningTx(t)
+	mu.EXPECT().FindByEmail(mock.Anything, "test@example.com").Return(newTestUser(1, "test@example.com", "", "hashed"), nil)
+	mo.EXPECT().FindValidByUserAndCode(mock.Anything, int64(1), otpRepo.OTPPurposePasswordReset, "12345").Return(&domain.OTP{ID: 7, UserID: 1}, nil)
+	mo.EXPECT().MarkUsed(inTx, int64(7)).Return(nil)
+	mu.EXPECT().UpdatePassword(inTx, int64(1), mock.Anything).Return(nil)
+
+	err := svc.ResetPassword(context.Background(), &dto.ResetPasswordRequest{Email: "test@example.com", OTP: "12345", NewPassword: "Password1!"})
+
+	assert.NoError(t, err)
+}
+
+func TestAuthService_ResetPassword_OTPAlreadyConsumed(t *testing.T) {
+	svc, mu, mo := newTestServiceRunningTx(t)
+	mu.EXPECT().FindByEmail(mock.Anything, "test@example.com").Return(newTestUser(1, "test@example.com", "", "hashed"), nil)
+	mo.EXPECT().FindValidByUserAndCode(mock.Anything, int64(1), otpRepo.OTPPurposePasswordReset, "12345").Return(&domain.OTP{ID: 7, UserID: 1}, nil)
+	// A parallel request consumed the OTP first. UpdatePassword must not run
+	// (the strict mock fails on an unexpected call).
+	mo.EXPECT().MarkUsed(inTx, int64(7)).Return(domain.ErrNotFound)
+
+	err := svc.ResetPassword(context.Background(), &dto.ResetPasswordRequest{Email: "test@example.com", OTP: "12345", NewPassword: "Password1!"})
+
+	assert.Error(t, err)
+}
+
+func TestAuthService_VerifyEmail_WritesInsideTx(t *testing.T) {
+	svc, mu, mo := newTestServiceRunningTx(t)
+	mo.EXPECT().FindValidByUserAndCode(mock.Anything, int64(1), otpRepo.OTPPurposeEmailVerification, "12345").Return(&domain.OTP{ID: 9, UserID: 1}, nil)
+	mo.EXPECT().MarkUsed(inTx, int64(9)).Return(nil)
+	mu.EXPECT().MarkEmailVerified(inTx, int64(1), mock.Anything).Return(nil)
+
+	err := svc.VerifyEmail(context.Background(), 1, "12345")
+
+	assert.NoError(t, err)
+}
+
+func TestAuthService_VerifyEmail_UpdateFailsReturnsError(t *testing.T) {
+	svc, mu, mo := newTestServiceRunningTx(t)
+	mo.EXPECT().FindValidByUserAndCode(mock.Anything, int64(1), otpRepo.OTPPurposeEmailVerification, "12345").Return(&domain.OTP{ID: 9, UserID: 1}, nil)
+	mo.EXPECT().MarkUsed(inTx, int64(9)).Return(nil)
+	mu.EXPECT().MarkEmailVerified(inTx, int64(1), mock.Anything).Return(errors.New("db down"))
+
+	err := svc.VerifyEmail(context.Background(), 1, "12345")
+
+	assertBusinessCode(t, err, exceptions.DataUpdateFailed)
+}

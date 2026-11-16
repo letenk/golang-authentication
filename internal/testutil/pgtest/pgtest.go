@@ -7,9 +7,11 @@ package pgtest
 
 import (
 	"database/sql"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 
@@ -47,6 +49,14 @@ func Open(t *testing.T) *database.Postgres {
 		t.Fatalf("pgtest: ping database: %v", err)
 	}
 
+	var name string
+	if err := sqlDB.QueryRow(`SELECT current_database()`).Scan(&name); err != nil {
+		t.Fatalf("pgtest: read database name: %v", err)
+	}
+	if err := requireTestDatabase(name); err != nil {
+		t.Fatalf("pgtest: %v", err)
+	}
+
 	migrateOnce.Do(func() { migrateErr = migrate(sqlDB) })
 	if migrateErr != nil {
 		t.Fatalf("pgtest: apply migrations: %v", migrateErr)
@@ -57,6 +67,15 @@ func Open(t *testing.T) *database.Postgres {
 	}
 
 	return &database.Postgres{DB: sqlDB}
+}
+
+// requireTestDatabase refuses any database whose name does not end in "_test",
+// because Open migrates it and truncates its tables.
+func requireTestDatabase(name string) error {
+	if len(name) <= len("_test") || !strings.HasSuffix(name, "_test") {
+		return fmt.Errorf("refusing to use database %q: its name must end in _test (tables are truncated)", name)
+	}
+	return nil
 }
 
 // InsertUser inserts a minimal user row with raw SQL and returns its id.

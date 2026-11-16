@@ -278,7 +278,7 @@ otps
 
 **TrxService** — `WithTx(ctx, func(ctx context.Context) error)` starts a transaction and passes a context that carries it. Repository calls made with that context join the transaction automatically; nested `WithTx` calls join the outer one.
 
-**Domain errors** — repositories return `domain.ErrNotFound`, and translate PostgreSQL unique violations into `domain.ErrEmailTaken` / `domain.ErrPhoneTaken`, so a race between two registrations still answers 409 instead of 500.
+**Domain errors** — repositories return `domain.ErrNotFound`, and translate PostgreSQL unique violations into `domain.ErrEmailTaken` / `domain.ErrPhoneTaken`, so a race between two registrations (or an email still held by a soft-deleted account) answers 422 `DataConflict` (10012) instead of 500.
 
 **Async email** — all email sends (OTP delivery) run in a background goroutine with an independent context and timeout. This keeps HTTP response times fast regardless of SMTP latency.
 
