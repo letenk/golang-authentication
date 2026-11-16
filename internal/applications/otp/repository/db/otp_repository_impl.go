@@ -2,12 +2,15 @@ package db
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/aarondl/opt/omit"
 	"github.com/aarondl/opt/omitnull"
 	"github.com/letenk/golang-authentication/bob/models"
 	"github.com/letenk/golang-authentication/configs/database"
+	"github.com/letenk/golang-authentication/internal/domain"
 )
 
 type OTPRepositoryImpl struct {
@@ -18,7 +21,7 @@ func NewOTPRepository(db *database.BobDB) *OTPRepositoryImpl {
 	return &OTPRepositoryImpl{db: db}
 }
 
-func (r *OTPRepositoryImpl) Create(ctx context.Context, params CreateOTPParams) (*models.Otp, error) {
+func (r *OTPRepositoryImpl) Create(ctx context.Context, params CreateOTPParams) (*domain.OTP, error) {
 	setter := &models.OtpSetter{
 		UserID:    omit.From(params.UserID),
 		Code:      omit.From(params.Code),
@@ -27,19 +30,27 @@ func (r *OTPRepositoryImpl) Create(ctx context.Context, params CreateOTPParams) 
 		CreatedAt: omitnull.From(time.Now().UTC()),
 	}
 
-	return models.Otps.Insert(setter).One(ctx, r.db.BobExec(ctx))
+	otp, err := models.Otps.Insert(setter).One(ctx, r.db.BobExec(ctx))
+	if err != nil {
+		return nil, err
+	}
+	return toDomainOTP(otp), nil
 }
 
-func (r *OTPRepositoryImpl) FindValidByUserAndCode(ctx context.Context, userID int64, purpose OTPPurpose, code string) (*models.Otp, error) {
+func (r *OTPRepositoryImpl) FindValidByUserAndCode(ctx context.Context, userID int64, purpose OTPPurpose, code string) (*domain.OTP, error) {
 	now := time.Now().UTC()
 
-	return models.Otps.Query(
+	otp, err := models.Otps.Query(
 		models.SelectWhere.Otps.UserID.EQ(userID),
 		models.SelectWhere.Otps.Purpose.EQ(string(purpose)),
 		models.SelectWhere.Otps.Code.EQ(code),
 		models.SelectWhere.Otps.ExpiresAt.GT(now),
 		models.SelectWhere.Otps.UsedAt.IsNull(),
 	).One(ctx, r.db.BobExec(ctx))
+	if err != nil {
+		return nil, translateErr(err)
+	}
+	return toDomainOTP(otp), nil
 }
 
 func (r *OTPRepositoryImpl) MarkUsed(ctx context.Context, id int64) error {
@@ -49,10 +60,11 @@ func (r *OTPRepositoryImpl) MarkUsed(ctx context.Context, id int64) error {
 
 	_, err := models.Otps.Update(
 		models.UpdateWhere.Otps.ID.EQ(id),
+		models.UpdateWhere.Otps.UsedAt.IsNull(), // a concurrent request may have consumed it
 		setter.UpdateMod(),
 	).One(ctx, r.db.BobExec(ctx))
 
-	return err
+	return translateErr(err)
 }
 
 func (r *OTPRepositoryImpl) InvalidatePreviousByUserIDAndPurpose(ctx context.Context, userID int64, purpose OTPPurpose) error {
@@ -68,4 +80,23 @@ func (r *OTPRepositoryImpl) InvalidatePreviousByUserIDAndPurpose(ctx context.Con
 	).Exec(ctx, r.db.BobExec(ctx))
 
 	return err
+}
+
+func translateErr(err error) error {
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.ErrNotFound
+	}
+	return err
+}
+
+func toDomainOTP(o *models.Otp) *domain.OTP {
+	return &domain.OTP{
+		ID:        o.ID,
+		UserID:    o.UserID,
+		Code:      o.Code,
+		Purpose:   o.Purpose,
+		ExpiresAt: o.ExpiresAt,
+		UsedAt:    o.UsedAt.Ptr(),
+		CreatedAt: o.CreatedAt.GetOrZero(),
+	}
 }

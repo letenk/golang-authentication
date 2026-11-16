@@ -12,6 +12,7 @@ import (
 	"github.com/letenk/golang-authentication/internal/applications/auth/dto"
 	"github.com/letenk/golang-authentication/internal/applications/auth/service"
 	emailSvcMocks "github.com/letenk/golang-authentication/internal/applications/email/service/mocks"
+	otpRepo "github.com/letenk/golang-authentication/internal/applications/otp/repository/db"
 	otpRepoMocks "github.com/letenk/golang-authentication/internal/applications/otp/repository/db/mocks"
 	refreshMocks "github.com/letenk/golang-authentication/internal/applications/refresh_token/repository/db/mocks"
 	trxMocks "github.com/letenk/golang-authentication/internal/applications/transaction/mocks"
@@ -40,6 +41,12 @@ func newTestJWTConfig(t *testing.T) *jwt_config.JWTConfig {
 
 func newTestService(t *testing.T) (*service.AuthServiceImpl, *userMocks.MockUserRepository, *refreshMocks.MockRefreshTokenRepository) {
 	t.Helper()
+	svc, mockUser, mockToken, _ := newTestServiceWithOTP(t)
+	return svc, mockUser, mockToken
+}
+
+func newTestServiceWithOTP(t *testing.T) (*service.AuthServiceImpl, *userMocks.MockUserRepository, *refreshMocks.MockRefreshTokenRepository, *otpRepoMocks.MockOTPRepository) {
+	t.Helper()
 	mockUser := userMocks.NewMockUserRepository(t)
 	mockToken := refreshMocks.NewMockRefreshTokenRepository(t)
 	mockOTP := otpRepoMocks.NewMockOTPRepository(t)
@@ -54,7 +61,15 @@ func newTestService(t *testing.T) (*service.AuthServiceImpl, *userMocks.MockUser
 	mockEmail.On("SendVerificationOTP", mock.Anything, mock.Anything, mock.Anything).Maybe().Return(nil)
 
 	svc := service.NewAuthService(mockTrx, mockUser, mockToken, mockOTP, mockEmail, newTestJWTConfig(t), otpConfig)
-	return svc, mockUser, mockToken
+	return svc, mockUser, mockToken, mockOTP
+}
+
+func assertBusinessCode(t *testing.T, err error, code int) {
+	t.Helper()
+	var bizErr *exceptions.BusinessLogicError
+	if assert.True(t, errors.As(err, &bizErr), "got %v", err) {
+		assert.Equal(t, code, bizErr.ErrorCode)
+	}
 }
 
 func newTestUser(id int64, email, phone, hashedPassword string) *domain.User {
@@ -575,4 +590,43 @@ func TestAuthService_GetMe(t *testing.T) {
 			}
 		})
 	}
+}
+
+// --- OTP flows ---
+
+func TestAuthService_ResetPassword_InvalidOTP(t *testing.T) {
+	svc, mu, _, mo := newTestServiceWithOTP(t)
+	mu.EXPECT().FindByEmail(mock.Anything, "test@example.com").Return(newTestUser(1, "test@example.com", "", "hashed"), nil)
+	mo.EXPECT().FindValidByUserAndCode(mock.Anything, int64(1), otpRepo.OTPPurposePasswordReset, "00000").Return(nil, domain.ErrNotFound)
+
+	err := svc.ResetPassword(context.Background(), &dto.ResetPasswordRequest{Email: "test@example.com", OTP: "00000", NewPassword: "Password1!"})
+
+	assertBusinessCode(t, err, exceptions.InvalidArgument)
+}
+
+func TestAuthService_ResetPassword_UnknownEmail(t *testing.T) {
+	svc, mu, _, _ := newTestServiceWithOTP(t)
+	mu.EXPECT().FindByEmail(mock.Anything, "nobody@example.com").Return(nil, domain.ErrNotFound)
+
+	err := svc.ResetPassword(context.Background(), &dto.ResetPasswordRequest{Email: "nobody@example.com", OTP: "00000", NewPassword: "Password1!"})
+
+	assertBusinessCode(t, err, exceptions.DataNotFound)
+}
+
+func TestAuthService_VerifyEmail_InvalidOTP(t *testing.T) {
+	svc, _, _, mo := newTestServiceWithOTP(t)
+	mo.EXPECT().FindValidByUserAndCode(mock.Anything, int64(1), otpRepo.OTPPurposeEmailVerification, "00000").Return(nil, domain.ErrNotFound)
+
+	err := svc.VerifyEmail(context.Background(), 1, "00000")
+
+	assertBusinessCode(t, err, exceptions.InvalidArgument)
+}
+
+func TestAuthService_ForgotPassword_UnknownEmailIsSilent(t *testing.T) {
+	svc, mu, _, _ := newTestServiceWithOTP(t)
+	mu.EXPECT().FindByEmail(mock.Anything, "nobody@example.com").Return(nil, domain.ErrNotFound)
+
+	err := svc.ForgotPassword(context.Background(), "nobody@example.com")
+
+	assert.NoError(t, err, "must not reveal whether the email exists")
 }

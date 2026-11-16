@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"time"
 
@@ -547,7 +546,7 @@ func (service *AuthServiceImpl) ResetPassword(ctx context.Context, req *dto.Rese
 
 	otpRecord, err := service.otpRepository.FindValidByUserAndCode(ctx, user.ID, otpRepo.OTPPurposePasswordReset, req.OTP)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, domain.ErrNotFound) {
 			return exceptions.NewBusinessLogicError(exceptions.InvalidArgument, errors.New("invalid or expired OTP"), nil)
 		}
 		log.Errorf("failed to find OTP for user %d: %s", user.ID, err)
@@ -656,7 +655,7 @@ func (service *AuthServiceImpl) SendVerificationEmail(ctx context.Context, userI
 func (service *AuthServiceImpl) VerifyEmail(ctx context.Context, userID int64, code string) error {
 	otpRecord, err := service.otpRepository.FindValidByUserAndCode(ctx, userID, otpRepo.OTPPurposeEmailVerification, code)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, domain.ErrNotFound) {
 			return exceptions.NewBusinessLogicError(exceptions.InvalidArgument, errors.New("invalid or expired OTP"), nil)
 		}
 		log.Errorf("failed to find verification OTP for user %d: %s", userID, err)
