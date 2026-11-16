@@ -9,15 +9,14 @@ import (
 	"os"
 	"testing"
 
-	"github.com/aarondl/opt/null"
 	"github.com/labstack/echo/v4"
-	"github.com/letenk/golang-authentication/bob/models"
 	"github.com/letenk/golang-authentication/configs/credential"
 	customValidator "github.com/letenk/golang-authentication/configs/validator"
 	"github.com/letenk/golang-authentication/exceptions"
 	"github.com/letenk/golang-authentication/internal/applications/auth/controller"
 	"github.com/letenk/golang-authentication/internal/applications/auth/dto"
 	authMocks "github.com/letenk/golang-authentication/internal/applications/auth/service/mocks"
+	"github.com/letenk/golang-authentication/internal/domain"
 	"github.com/letenk/golang-authentication/internal/utils/headers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -89,9 +88,9 @@ func TestAuthController_Register(t *testing.T) {
 				"password": "Password1!",
 			},
 			setupMock: func(ms *authMocks.MockAuthService) {
-				ms.EXPECT().Register(mock.Anything, mock.Anything).Return(&models.User{
+				ms.EXPECT().Register(mock.Anything, mock.Anything).Return(&domain.User{
 					ID:    1,
-					Email: null.From("test@example.com"),
+					Email: "test@example.com",
 				}, nil)
 			},
 			wantStatus: http.StatusOK,

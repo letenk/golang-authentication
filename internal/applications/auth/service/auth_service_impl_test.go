@@ -19,6 +19,7 @@ import (
 	refreshMocks "github.com/letenk/golang-authentication/internal/applications/refresh_token/repository/db/mocks"
 	trxMocks "github.com/letenk/golang-authentication/internal/applications/transaction/mocks"
 	userMocks "github.com/letenk/golang-authentication/internal/applications/user/repository/db/mocks"
+	"github.com/letenk/golang-authentication/internal/domain"
 	"github.com/letenk/golang-authentication/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -59,18 +60,15 @@ func newTestService(t *testing.T) (*service.AuthServiceImpl, *userMocks.MockUser
 	return svc, mockUser, mockToken
 }
 
-func newTestUser(id int64, email, phone, hashedPassword string) *models.User {
-	u := &models.User{
-		ID:         id,
-		Password:   hashedPassword,
-		LoginType:  "email",
-		IsVerified: null.From(false),
-	}
-	if email != "" {
-		u.Email = null.From(email)
+func newTestUser(id int64, email, phone, hashedPassword string) *domain.User {
+	u := &domain.User{
+		ID:        id,
+		Email:     email,
+		Phone:     phone,
+		Password:  hashedPassword,
+		LoginType: "email",
 	}
 	if phone != "" {
-		u.Phone = null.From(phone)
 		if email == "" {
 			u.LoginType = "phone"
 		}
@@ -109,6 +107,7 @@ func TestAuthService_Register(t *testing.T) {
 		setupMock func(mu *userMocks.MockUserRepository)
 		wantErr   bool
 		errType   interface{}
+		wantCode  int
 	}{
 		{
 			name: "success register via email",
@@ -118,11 +117,11 @@ func TestAuthService_Register(t *testing.T) {
 				Password: "Password1!",
 			},
 			setupMock: func(mu *userMocks.MockUserRepository) {
-				mu.EXPECT().FindByEmail(mock.Anything, "test@example.com").Return(nil, sql.ErrNoRows)
+				mu.EXPECT().FindByEmail(mock.Anything, "test@example.com").Return(nil, domain.ErrNotFound)
 				mu.EXPECT().Create(mock.Anything, mock.Anything).Return(newTestUser(1, "test@example.com", "", "hashed"), nil)
 				// Allow async goroutine (SendVerificationEmail) to call FindByID.
 				// Returns ErrNoRows so the goroutine exits early without further calls.
-				mu.On("FindByID", mock.Anything, mock.Anything).Maybe().Return(nil, sql.ErrNoRows)
+				mu.On("FindByID", mock.Anything, mock.Anything).Maybe().Return(nil, domain.ErrNotFound)
 			},
 			wantErr: false,
 		},
@@ -134,7 +133,7 @@ func TestAuthService_Register(t *testing.T) {
 				Password: "Password1!",
 			},
 			setupMock: func(mu *userMocks.MockUserRepository) {
-				mu.EXPECT().FindByPhone(mock.Anything, "+628123456789").Return(nil, sql.ErrNoRows)
+				mu.EXPECT().FindByPhone(mock.Anything, "+628123456789").Return(nil, domain.ErrNotFound)
 				mu.EXPECT().Create(mock.Anything, mock.Anything).Return(newTestUser(1, "", "+628123456789", "hashed"), nil)
 			},
 			wantErr: false,
@@ -163,6 +162,34 @@ func TestAuthService_Register(t *testing.T) {
 			wantErr: true,
 			errType: &exceptions.BusinessLogicError{},
 		},
+		{
+			// Pre-check passes (concurrent signup, or the email belongs to a
+			// soft-deleted account) but the unique index rejects the insert.
+			name: "email taken at insert",
+			param: &dto.ParameterRegister{
+				Email:    "race@example.com",
+				Password: "Password1!",
+			},
+			setupMock: func(mu *userMocks.MockUserRepository) {
+				mu.EXPECT().FindByEmail(mock.Anything, "race@example.com").Return(nil, domain.ErrNotFound)
+				mu.EXPECT().Create(mock.Anything, mock.Anything).Return(nil, domain.ErrEmailTaken)
+			},
+			wantErr:  true,
+			wantCode: exceptions.DataConflict,
+		},
+		{
+			name: "phone taken at insert",
+			param: &dto.ParameterRegister{
+				Phone:    "+628123456789",
+				Password: "Password1!",
+			},
+			setupMock: func(mu *userMocks.MockUserRepository) {
+				mu.EXPECT().FindByPhone(mock.Anything, "+628123456789").Return(nil, domain.ErrNotFound)
+				mu.EXPECT().Create(mock.Anything, mock.Anything).Return(nil, domain.ErrPhoneTaken)
+			},
+			wantErr:  true,
+			wantCode: exceptions.DataConflict,
+		},
 	}
 
 	for _, tt := range tests {
@@ -179,6 +206,12 @@ func TestAuthService_Register(t *testing.T) {
 				assert.Error(t, err)
 				if tt.errType != nil {
 					assert.True(t, errors.As(err, &tt.errType))
+				}
+				if tt.wantCode != 0 {
+					var bizErr *exceptions.BusinessLogicError
+					if assert.True(t, errors.As(err, &bizErr)) {
+						assert.Equal(t, tt.wantCode, bizErr.ErrorCode)
+					}
 				}
 				assert.Nil(t, result)
 			} else {
@@ -233,7 +266,7 @@ func TestAuthService_Login(t *testing.T) {
 				Password: testPassword,
 			},
 			setupMock: func(mu *userMocks.MockUserRepository, mt *refreshMocks.MockRefreshTokenRepository) {
-				mu.EXPECT().FindByEmail(mock.Anything, "notfound@example.com").Return(nil, sql.ErrNoRows)
+				mu.EXPECT().FindByEmail(mock.Anything, "notfound@example.com").Return(nil, domain.ErrNotFound)
 			},
 			wantErr: true,
 			checkErr: func(t *testing.T, err error) {
@@ -497,7 +530,7 @@ func TestAuthService_GetMe(t *testing.T) {
 			name:   "user not found",
 			userID: 99,
 			setupMock: func(mu *userMocks.MockUserRepository) {
-				mu.EXPECT().FindByID(mock.Anything, int64(99)).Return(nil, sql.ErrNoRows)
+				mu.EXPECT().FindByID(mock.Anything, int64(99)).Return(nil, domain.ErrNotFound)
 			},
 			wantErr: true,
 			checkErr: func(t *testing.T, err error) {
