@@ -16,7 +16,6 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/letenk/golang-authentication/configs/database"
 	"github.com/pressly/goose/v3"
-	"github.com/stephenafamo/bob"
 )
 
 const envDatabaseURL = "TEST_DATABASE_URL"
@@ -30,7 +29,7 @@ var (
 // process, and empties every application table so each test starts clean.
 // Identities are restarted so the first inserted user gets id 1, which the
 // users.created_by foreign key relies on (id 1 = system user).
-func Open(t *testing.T) *database.BobDB {
+func Open(t *testing.T) *database.Postgres {
 	t.Helper()
 
 	url := os.Getenv(envDatabaseURL)
@@ -57,7 +56,7 @@ func Open(t *testing.T) *database.BobDB {
 		t.Fatalf("pgtest: truncate tables: %v", err)
 	}
 
-	return &database.BobDB{DB: sqlDB, Exec: bob.NewDB(sqlDB)}
+	return &database.Postgres{DB: sqlDB}
 }
 
 // InsertUser inserts a minimal user row with raw SQL and returns its id.

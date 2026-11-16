@@ -1,6 +1,6 @@
 # Go Auth System — Authentication Boilerplate Built with Production-Grade Patterns
 
-A well-architected authentication boilerplate built with Go, designed to be the starting point for any Go project that needs a solid auth foundation. The patterns and architecture here — type-safe queries via Bob ORM, compile-time DI via Wire, token rotation, generic OTP system, internationally-aware phone normalization — are the same patterns you'd reach for in production code.
+A well-architected authentication boilerplate built with Go, designed to be the starting point for any Go project that needs a solid auth foundation. The patterns and architecture here — type-safe SQL via sqlc, compile-time DI via Wire, token rotation, generic OTP system, internationally-aware phone normalization — are the same patterns you'd reach for in production code.
 
 This is a **foundation, not a finished production system**. Use it to skip the boilerplate; harden it for your production environment as you grow.
 
@@ -31,7 +31,7 @@ Every new project needs authentication. Instead of rebuilding the same patterns 
 | Layer | Library | Why |
 |---|---|---|
 | **HTTP Framework** | [Echo v4](https://github.com/labstack/echo) | Minimal, fast, great middleware ecosystem |
-| **ORM / Query Builder** | [Bob v0.43](https://github.com/stephenafamo/bob) | Type-safe SQL, code generation, no magic |
+| **Database access** | [sqlc v1.31](https://github.com/sqlc-dev/sqlc) | Type-safe Go generated from plain SQL; generated code has no runtime dependency |
 | **Database** | PostgreSQL | Battle-tested, feature-rich relational DB |
 | **Migrations** | [Goose v3](https://github.com/pressly/goose) | Simple, SQL-first migration tool |
 | **JWT** | [golang-jwt/jwt v5](https://github.com/golang-jwt/jwt) | Standard JWT library with full RFC support |
@@ -44,40 +44,20 @@ Every new project needs authentication. Instead of rebuilding the same patterns 
 
 ---
 
-## Why Bob ORM?
+## Why sqlc?
 
-Most Go projects reach for GORM or sqlx. Here's why Bob was chosen instead.
+Database access is written as **plain SQL** in `db/queries/*.sql`. [sqlc](https://docs.sqlc.dev) reads those queries plus the goose migrations and generates type-safe Go in `db/sqlcgen/`.
 
-### The Problem with GORM
+- **Compile-time safety** — a renamed column or a wrong parameter type fails `make sqlc-gen` / `go build`, not production.
+- **No runtime dependency** — the generated code is plain `database/sql`. If sqlc were abandoned tomorrow, the code keeps working and can even be edited by hand.
+- **No database needed to generate** — the schema comes from `migrations/`, so `make sqlc-check` runs in CI without Postgres.
+- **Stable** — sqlc is v1 with a stable API and a large user base.
 
-GORM is convenient but trades correctness for magic:
-- Queries are built at runtime via reflection — typos and wrong field names only fail at runtime
-- Hook system and association loading have surprising behavior under transactions
-- Hard to write custom or complex queries without dropping into raw SQL
+The trade-off is that highly dynamic queries (many optional filters/sorts) are less pleasant to express; use `sqlc.narg()` + `COALESCE` as in `UpdateUserProfile`, or a small query builder for that one query.
 
-### The Problem with sqlx
+### This project moved from Bob to sqlc
 
-sqlx is closer to the metal but still requires writing SQL strings by hand — no compile-time guarantees, and no code generation.
-
-### Why Bob
-
-Bob takes a different approach: **code generation from the actual database schema**.
-
-Run `make bob-gen` after every migration, and Bob generates typed model structs, type-safe query builders, and test factories directly from your live schema. If a column is renamed in a migration and the generated code is not updated, the code **won't compile** — the bug is caught before it ever reaches runtime.
-
-**Summary:**
-
-| | GORM | sqlx | Bob |
-|---|---|---|---|
-| Type safety | Runtime | None | Compile-time |
-| Code generation | No | No | Yes |
-| Custom queries | Awkward | Raw SQL | Builder API |
-| Transaction support | Hooks | Manual | Native executor |
-| Test factories | Manual | Manual | Generated |
-
-Bob requires an upfront `make bob-gen` step after every migration, but the payoff is fewer runtime surprises and better IDE support.
-
-For full documentation and usage examples, see the [Bob official documentation](https://bob.stephenafamo.com).
+The boilerplate originally used [Bob](https://github.com/stephenafamo/bob). It was replaced because Bob is still pre-1.0 (frequent breaking minor releases), largely maintained by one person, and its generated code depends on the Bob runtime. The migration first decoupled services from Bob (repositories now expose only `internal/domain` types), then swapped each repository to sqlc; that swap touched repository files only, and the repository integration tests passed unchanged. See `docs/superpowers/specs/2026-11-15-bob-to-sqlc-design.md`.
 
 ---
 
@@ -85,22 +65,22 @@ For full documentation and usage examples, see the [Bob official documentation](
 
 ```
 .
-├── bob/                          # Bob ORM generated code (do not edit manually)
-│   ├── models/                  # Generated model structs and query builders
-│   ├── factory/                 # Generated test data factories
-│   ├── dberrors/                # Per-table database error handling
-│   └── dbinfo/                  # Schema metadata
+├── db/
+│   ├── queries/                 # Hand-written SQL, one file per table (edit these)
+│   └── sqlcgen/                 # sqlc generated code (do not edit manually)
 ├── cmd/
 │   └── main.go                  # Entry point
 ├── configs/
 │   ├── credential/              # Config structs + Viper initialization
-│   ├── database/                # DB connection setup
+│   ├── database/                # DB connection, tx-in-context, NULL helpers
 │   ├── jwt_config/              # JWT sign/verify logic
 │   └── validator/               # Custom Echo validator
 ├── docs/                        # Documentation and migration guides
 ├── exceptions/                  # Domain-level error types
 ├── internal/
 │   ├── adapter/rest/            # Echo server setup, middleware, routing
+│   ├── domain/                  # Entities + domain errors (stdlib only)
+│   ├── testutil/pgtest/         # Real-Postgres helper for integration tests
 │   └── applications/
 │       ├── auth/                # Auth feature (controller, service, dto, mocks)
 │       ├── email/               # SMTP email service
@@ -112,7 +92,8 @@ For full documentation and usage examples, see the [Bob official documentation](
 │   └── authentication/          # JWT middleware (Authenticate)
 ├── migrations/                  # SQL migration files (Goose)
 ├── .env-example                 # Environment variable template
-├── bobgen.yaml                  # Bob code generation config
+├── sqlc.yaml                    # sqlc code generation config
+├── docker-compose.test.yml      # Disposable Postgres for integration tests
 ├── docker-compose.yml
 ├── Dockerfile
 └── Makefile
@@ -180,12 +161,12 @@ cp .env-example .env
 make migration-up
 ```
 
-### 3. Generate Bob ORM models
+### 3. Generate database code
 
-> Run this after every migration.
+> Run this after changing a migration or a file in `db/queries/`. No database needed.
 
 ```bash
-make bob-gen
+make sqlc-gen
 ```
 
 ### 4. Run the server
@@ -205,8 +186,16 @@ docker compose up -d
 ## Development
 
 ```bash
-# Run tests
+# Run unit tests
 make test
+
+# Run unit + integration tests against a real Postgres
+make test-db-up          # disposable Postgres on :55432 (or set TEST_DATABASE_URL)
+make test-integration
+make test-db-down
+
+# Fail if generated sqlc code is out of date (CI)
+make sqlc-check
 
 # Run tests with coverage report
 make test-coverage
@@ -285,9 +274,11 @@ otps
 
 **Clean Architecture** — each feature lives in `internal/applications/<feature>/` with its own controller, service, repository, and DTO layers. Dependencies flow inward: controller → service → repository.
 
-**Repository pattern** — all database access is behind interfaces. This makes unit testing straightforward (swap the real repo for a mock) and keeps the service layer database-agnostic.
+**Repository pattern** — all database access is behind interfaces that accept and return only `internal/domain` types (or the repository's own params structs). ORM/generated types never leave the repository package, so the service layer is database-agnostic and the persistence library can be swapped by rewriting repositories alone.
 
-**TrxService** — a `WithTx(ctx, fn)` abstraction wraps database transactions. Service methods that need atomicity pass a `bob.Executor` into the callback, keeping transaction management out of the repository layer.
+**TrxService** — `WithTx(ctx, func(ctx context.Context) error)` starts a transaction and passes a context that carries it. Repository calls made with that context join the transaction automatically; nested `WithTx` calls join the outer one.
+
+**Domain errors** — repositories return `domain.ErrNotFound`, and translate PostgreSQL unique violations into `domain.ErrEmailTaken` / `domain.ErrPhoneTaken`, so a race between two registrations still answers 409 instead of 500.
 
 **Async email** — all email sends (OTP delivery) run in a background goroutine with an independent context and timeout. This keeps HTTP response times fast regardless of SMTP latency.
 

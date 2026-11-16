@@ -3,8 +3,6 @@ package database
 import (
 	"context"
 	"database/sql"
-
-	"github.com/stephenafamo/bob"
 )
 
 // DBTX is the subset of *sql.DB / *sql.Tx that query code needs. It matches
@@ -32,17 +30,9 @@ func TxFromContext(ctx context.Context) (*sql.Tx, bool) {
 
 // Conn returns the transaction carried by ctx, or the connection pool when
 // ctx carries none.
-func (db *BobDB) Conn(ctx context.Context) DBTX {
+func (db *Postgres) Conn(ctx context.Context) DBTX {
 	if tx, ok := TxFromContext(ctx); ok {
 		return tx
 	}
 	return db.DB
-}
-
-// BobExec is Conn for Bob query builders. Removed once Bob is gone.
-func (db *BobDB) BobExec(ctx context.Context) bob.Executor {
-	if tx, ok := TxFromContext(ctx); ok {
-		return bob.NewTx(tx)
-	}
-	return db.Exec
 }

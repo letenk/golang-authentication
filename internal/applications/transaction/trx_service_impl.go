@@ -8,10 +8,10 @@ import (
 )
 
 type TrxServiceImpl struct {
-	db *database.BobDB
+	db *database.Postgres
 }
 
-func NewTrxService(db *database.BobDB) TrxService {
+func NewTrxService(db *database.Postgres) TrxService {
 	return &TrxServiceImpl{db: db}
 }
 

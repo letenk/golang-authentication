@@ -14,7 +14,7 @@ import (
 	authentication "github.com/letenk/golang-authentication/middleware/authentication"
 )
 
-func SetupRouteHandler(e *echo.Echo, db *database.BobDB, jwtConfig *jwt_config.JWTConfig) {
+func SetupRouteHandler(e *echo.Echo, db *database.Postgres, jwtConfig *jwt_config.JWTConfig) {
 
 	// TODO: Implement Swagger
 
@@ -41,7 +41,7 @@ func SetupRouteHandler(e *echo.Echo, db *database.BobDB, jwtConfig *jwt_config.J
 }
 
 // healthCheckHandler endpoint for monitoring
-func healthCheckHandler(db *database.BobDB) echo.HandlerFunc {
+func healthCheckHandler(db *database.Postgres) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		if err := db.HealthCheck(c.Request().Context()); err != nil {
 			return c.JSON(503, map[string]interface{}{

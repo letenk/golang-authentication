@@ -31,7 +31,7 @@ func TestTxFromContext_Absent(t *testing.T) {
 func TestConn_UsesTxFromContextOtherwiseDB(t *testing.T) {
 	sqlDB := &sql.DB{}
 	tx := &sql.Tx{}
-	db := &database.BobDB{DB: sqlDB}
+	db := &database.Postgres{DB: sqlDB}
 
 	assert.Same(t, sqlDB, db.Conn(context.Background()))
 	assert.Same(t, tx, db.Conn(database.ContextWithTx(context.Background(), tx)))

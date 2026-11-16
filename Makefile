@@ -3,7 +3,7 @@ include .env
 export
 
 # Build once, reuse
-.PHONY: run build test test-coverage test-db-up test-db-down test-integration migration-build migration-create migration-up migration-down migration-status bob-gen sqlc-gen sqlc-check
+.PHONY: run build test test-coverage test-db-up test-db-down test-integration migration-build migration-create migration-up migration-down migration-status sqlc-gen sqlc-check
 
 # sqlc is pinned; generated code has no runtime dependency on sqlc
 SQLC_VERSION := v1.31.1
@@ -79,10 +79,6 @@ sqlc-gen:
 sqlc-check:
 	$(SQLC) diff
 
-# Generate Bob ORM models from database schema
-bob-gen:
-	PSQL_DSN=postgres://$(DB_CONFIGS_USER):$(DB_CONFIGS_PASSWORD)@$(DB_CONFIGS_HOST):$(DB_CONFIGS_PORT)/$(DB_CONFIGS_NAME)?sslmode=$(DB_CONFIGS_SSLMODE) go run github.com/stephenafamo/bob/gen/bobgen-psql@latest
-
 # Clean built binaries
 clean:
 	rm -f main migration
@@ -99,7 +95,6 @@ help:
 	@echo "  make migration-down     - Rollback last migration"
 	@echo "  make migration-status   - Show migration status"
 	@echo "  make migration-version  - Show current migration version"
-	@echo "  make bob-gen            - Generate Bob ORM models from DB schema"
 	@echo "  make sqlc-gen           - Generate Go from db/queries/*.sql (sqlc $(SQLC_VERSION))"
 	@echo "  make sqlc-check         - Fail if sqlc generated code is out of date"
 	@echo "  make test               - Run all tests"

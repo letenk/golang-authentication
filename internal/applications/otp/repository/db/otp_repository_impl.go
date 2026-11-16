@@ -11,10 +11,10 @@ import (
 )
 
 type OTPRepositoryImpl struct {
-	db *database.BobDB
+	db *database.Postgres
 }
 
-func NewOTPRepository(db *database.BobDB) *OTPRepositoryImpl {
+func NewOTPRepository(db *database.Postgres) *OTPRepositoryImpl {
 	return &OTPRepositoryImpl{db: db}
 }
 

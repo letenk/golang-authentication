@@ -17,10 +17,10 @@ const (
 )
 
 type UserRepositoryImpl struct {
-	db *database.BobDB
+	db *database.Postgres
 }
 
-func NewUserRepository(db *database.BobDB) *UserRepositoryImpl {
+func NewUserRepository(db *database.Postgres) *UserRepositoryImpl {
 	return &UserRepositoryImpl{db: db}
 }
 

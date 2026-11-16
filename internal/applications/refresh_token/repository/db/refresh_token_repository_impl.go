@@ -11,10 +11,10 @@ import (
 )
 
 type RefreshTokenRepositoryImpl struct {
-	db *database.BobDB
+	db *database.Postgres
 }
 
-func NewRefreshTokenRepository(db *database.BobDB) *RefreshTokenRepositoryImpl {
+func NewRefreshTokenRepository(db *database.Postgres) *RefreshTokenRepositoryImpl {
 	return &RefreshTokenRepositoryImpl{db: db}
 }
 

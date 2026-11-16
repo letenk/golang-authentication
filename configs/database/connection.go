@@ -6,24 +6,22 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/labstack/gommon/log"
 	"github.com/letenk/golang-authentication/configs/credential"
-	"github.com/stephenafamo/bob"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-type BobDB struct {
-	DB   *sql.DB
-	Exec bob.Executor
+// Postgres wraps the connection pool. Repositories reach it through Conn(ctx)
+// so they automatically join a transaction started by TrxService.
+type Postgres struct {
+	DB *sql.DB
 }
 
-func NewSqlBobClient(cfg *credential.DBConnectionConfig) (*BobDB, error) {
+func NewPostgres(cfg *credential.DBConnectionConfig) (*Postgres, error) {
 
 	// Build a connection value from environment variable
+	// Never log the DSN: it contains the database password.
 	dsn := cfg.GetDSNPostgreSQL()
-
-	log.Debug("DSN: ", dsn)
 
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
@@ -39,16 +37,10 @@ func NewSqlBobClient(cfg *credential.DBConnectionConfig) (*BobDB, error) {
 		return nil, fmt.Errorf("unable to ping database: %w", err)
 	}
 
-	// TODO: toggle app mode and add debug query
-	exec := bob.NewDB(db)
-
-	return &BobDB{
-		DB:   db,
-		Exec: exec,
-	}, nil
+	return &Postgres{DB: db}, nil
 }
 
-func (db *BobDB) HealthCheck(ctx context.Context) error {
+func (db *Postgres) HealthCheck(ctx context.Context) error {
 	if db == nil || db.DB == nil {
 		return fmt.Errorf("database connection is nil")
 	}
