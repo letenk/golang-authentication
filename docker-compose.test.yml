@@ -1,0 +1,19 @@
+# Disposable PostgreSQL for integration tests (make test-db-up / test-db-down).
+# Data lives in tmpfs, so every `up` starts from an empty database.
+services:
+  postgres-test:
+    image: postgres:16-alpine
+    container_name: auth-system-postgres-test
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: auth_test
+    ports:
+      - "55432:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d auth_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 15

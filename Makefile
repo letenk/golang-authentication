@@ -3,7 +3,10 @@ include .env
 export
 
 # Build once, reuse
-.PHONY: run build test test-coverage migration-build migration-create migration-up migration-down migration-status bob-gen
+.PHONY: run build test test-coverage test-db-up test-db-down test-integration migration-build migration-create migration-up migration-down migration-status bob-gen
+
+# Disposable Postgres used by integration tests (see docker-compose.test.yml)
+TEST_DATABASE_URL ?= postgres://postgres:postgres@localhost:55432/auth_test?sslmode=disable
 
 run:
 	go run cmd/main.go
@@ -19,6 +22,17 @@ test:
 test-coverage:
 	go test ./... -count=1 -coverprofile=coverage.out
 	go tool cover -func=coverage.out
+
+# Start / stop the disposable Postgres for integration tests
+test-db-up:
+	docker compose -f docker-compose.test.yml up -d --wait
+
+test-db-down:
+	docker compose -f docker-compose.test.yml down -v
+
+# Run unit + integration tests against TEST_DATABASE_URL (run `make test-db-up` first)
+test-integration:
+	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" go test -tags=integration -count=1 -p 1 ./...
 
 # Build migration binary (only when needed)
 migration-build:
@@ -74,6 +88,9 @@ help:
 	@echo "  make bob-gen            - Generate Bob ORM models from DB schema"
 	@echo "  make test               - Run all tests"
 	@echo "  make test-coverage      - Run all tests with coverage report"
+	@echo "  make test-db-up         - Start disposable Postgres for integration tests"
+	@echo "  make test-db-down       - Stop disposable Postgres for integration tests"
+	@echo "  make test-integration   - Run unit + integration tests (needs test-db-up)"
 	@echo "  make clean              - Remove built binaries"
 
 .DEFAULT_GOAL := help
