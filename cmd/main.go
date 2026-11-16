@@ -50,7 +50,7 @@ func main() {
 	defer func(dbConnection *database.BobDB) {
 		err := dbConnection.DB.Close()
 		if err != nil {
-			log.Fatalf("error initialized database configuration=", err)
+			log.Fatalf("failed to close database connection: %v", err)
 		}
 	}(dbConnection)
 
