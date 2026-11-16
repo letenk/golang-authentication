@@ -1,0 +1,13 @@
+# sqlc: type-safe Go generated from plain SQL (https://docs.sqlc.dev).
+# Schema is read straight from the goose migrations (down sections are ignored),
+# so `make sqlc-gen` needs no running database.
+version: "2"
+sql:
+  - engine: postgresql
+    schema: migrations
+    queries: db/queries
+    gen:
+      go:
+        package: sqlcgen
+        out: db/sqlcgen
+        sql_package: database/sql

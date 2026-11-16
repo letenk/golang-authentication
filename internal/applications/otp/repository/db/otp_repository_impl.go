@@ -6,10 +6,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/aarondl/opt/omit"
-	"github.com/aarondl/opt/omitnull"
-	"github.com/letenk/golang-authentication/bob/models"
 	"github.com/letenk/golang-authentication/configs/database"
+	"github.com/letenk/golang-authentication/db/sqlcgen"
 	"github.com/letenk/golang-authentication/internal/domain"
 )
 
@@ -21,16 +19,18 @@ func NewOTPRepository(db *database.BobDB) *OTPRepositoryImpl {
 	return &OTPRepositoryImpl{db: db}
 }
 
-func (r *OTPRepositoryImpl) Create(ctx context.Context, params CreateOTPParams) (*domain.OTP, error) {
-	setter := &models.OtpSetter{
-		UserID:    omit.From(params.UserID),
-		Code:      omit.From(params.Code),
-		Purpose:   omit.From(string(params.Purpose)),
-		ExpiresAt: omit.From(params.ExpiresAt),
-		CreatedAt: omitnull.From(time.Now().UTC()),
-	}
+// queries runs on the transaction carried by ctx, or on the pool.
+func (r *OTPRepositoryImpl) queries(ctx context.Context) *sqlcgen.Queries {
+	return sqlcgen.New(r.db.Conn(ctx))
+}
 
-	otp, err := models.Otps.Insert(setter).One(ctx, r.db.BobExec(ctx))
+func (r *OTPRepositoryImpl) Create(ctx context.Context, params CreateOTPParams) (*domain.OTP, error) {
+	otp, err := r.queries(ctx).CreateOTP(ctx, sqlcgen.CreateOTPParams{
+		UserID:    params.UserID,
+		Code:      params.Code,
+		Purpose:   string(params.Purpose),
+		ExpiresAt: params.ExpiresAt,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -38,15 +38,11 @@ func (r *OTPRepositoryImpl) Create(ctx context.Context, params CreateOTPParams) 
 }
 
 func (r *OTPRepositoryImpl) FindValidByUserAndCode(ctx context.Context, userID int64, purpose OTPPurpose, code string) (*domain.OTP, error) {
-	now := time.Now().UTC()
-
-	otp, err := models.Otps.Query(
-		models.SelectWhere.Otps.UserID.EQ(userID),
-		models.SelectWhere.Otps.Purpose.EQ(string(purpose)),
-		models.SelectWhere.Otps.Code.EQ(code),
-		models.SelectWhere.Otps.ExpiresAt.GT(now),
-		models.SelectWhere.Otps.UsedAt.IsNull(),
-	).One(ctx, r.db.BobExec(ctx))
+	otp, err := r.queries(ctx).FindValidOTP(ctx, sqlcgen.FindValidOTPParams{
+		UserID:  userID,
+		Purpose: string(purpose),
+		Code:    code,
+	})
 	if err != nil {
 		return nil, translateErr(err)
 	}
@@ -54,32 +50,21 @@ func (r *OTPRepositoryImpl) FindValidByUserAndCode(ctx context.Context, userID i
 }
 
 func (r *OTPRepositoryImpl) MarkUsed(ctx context.Context, id int64) error {
-	setter := &models.OtpSetter{
-		UsedAt: omitnull.From(time.Now().UTC()),
+	n, err := r.queries(ctx).MarkOTPUsed(ctx, id)
+	if err != nil {
+		return err
 	}
-
-	_, err := models.Otps.Update(
-		models.UpdateWhere.Otps.ID.EQ(id),
-		models.UpdateWhere.Otps.UsedAt.IsNull(), // a concurrent request may have consumed it
-		setter.UpdateMod(),
-	).One(ctx, r.db.BobExec(ctx))
-
-	return translateErr(err)
+	if n == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
 }
 
 func (r *OTPRepositoryImpl) InvalidatePreviousByUserIDAndPurpose(ctx context.Context, userID int64, purpose OTPPurpose) error {
-	setter := &models.OtpSetter{
-		UsedAt: omitnull.From(time.Now().UTC()),
-	}
-
-	_, err := models.Otps.Update(
-		models.UpdateWhere.Otps.UserID.EQ(userID),
-		models.UpdateWhere.Otps.Purpose.EQ(string(purpose)),
-		models.UpdateWhere.Otps.UsedAt.IsNull(),
-		setter.UpdateMod(),
-	).Exec(ctx, r.db.BobExec(ctx))
-
-	return err
+	return r.queries(ctx).InvalidateOTPsByUserAndPurpose(ctx, sqlcgen.InvalidateOTPsByUserAndPurposeParams{
+		UserID:  userID,
+		Purpose: string(purpose),
+	})
 }
 
 func translateErr(err error) error {
@@ -89,14 +74,21 @@ func translateErr(err error) error {
 	return err
 }
 
-func toDomainOTP(o *models.Otp) *domain.OTP {
+func toDomainOTP(o sqlcgen.Otp) *domain.OTP {
 	return &domain.OTP{
 		ID:        o.ID,
 		UserID:    o.UserID,
 		Code:      o.Code,
 		Purpose:   o.Purpose,
 		ExpiresAt: o.ExpiresAt,
-		UsedAt:    o.UsedAt.Ptr(),
-		CreatedAt: o.CreatedAt.GetOrZero(),
+		UsedAt:    nullTimePtr(o.UsedAt),
+		CreatedAt: o.CreatedAt.Time, // zero when NULL
 	}
+}
+
+func nullTimePtr(t sql.NullTime) *time.Time {
+	if !t.Valid {
+		return nil
+	}
+	return &t.Time
 }
