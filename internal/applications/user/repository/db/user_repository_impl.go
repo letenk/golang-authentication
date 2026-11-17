@@ -2,129 +2,140 @@ package db
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"time"
 
-	"github.com/aarondl/opt/omit"
-	"github.com/aarondl/opt/omitnull"
-	"github.com/letenk/golang-authentication/bob/models"
 	"github.com/letenk/golang-authentication/configs/database"
-	"github.com/stephenafamo/bob"
+	"github.com/letenk/golang-authentication/db/sqlcgen"
+	"github.com/letenk/golang-authentication/internal/domain"
 )
 
+const (
+	emailUniqueIndex = "users_email_unique_idx"
+	phoneUniqueIndex = "users_phone_unique_idx"
+)
 
 type UserRepositoryImpl struct {
-	db *database.BobDB
+	db *database.Postgres
 }
 
-func NewUserRepository(db *database.BobDB) *UserRepositoryImpl {
-	return &UserRepositoryImpl{
-		db: db,
-	}
+func NewUserRepository(db *database.Postgres) *UserRepositoryImpl {
+	return &UserRepositoryImpl{db: db}
 }
 
-func (r *UserRepositoryImpl) Create(ctx context.Context, entity *models.UserSetter) (*models.User, error) {
+// queries runs on the transaction carried by ctx, or on the pool.
+func (r *UserRepositoryImpl) queries(ctx context.Context) *sqlcgen.Queries {
+	return sqlcgen.New(r.db.Conn(ctx))
+}
 
-	entity.CreatedAt = omitnull.From(time.Now().UTC())
-	entity.UpdatedAt = omitnull.From(time.Now().UTC())
-
-	if entity.CreatedBy.IsZero() || entity.CreatedBy == omit.From[int64](0) {
-		entity.CreatedBy = omit.From(int64(1)) // Default value for system user
+func (r *UserRepositoryImpl) Create(ctx context.Context, params CreateUserParams) (*domain.User, error) {
+	createdBy := params.CreatedBy
+	if createdBy == 0 {
+		createdBy = SystemUserID
 	}
 
-	if entity.UpdatedBy.IsZero() || entity.UpdatedBy == omit.From[int64](0) {
-		entity.UpdatedBy = omit.From(int64(1)) // Default value for system user
-	}
-
-	user, err := models.Users.Insert(entity).One(ctx, r.db.Exec)
+	user, err := r.queries(ctx).CreateUser(ctx, sqlcgen.CreateUserParams{
+		Name:      database.NullString(params.Name),
+		Email:     database.NullString(params.Email),
+		Phone:     database.NullString(params.Phone),
+		Password:  params.Password,
+		LoginType: params.LoginType,
+		CreatedBy: createdBy,
+	})
 	if err != nil {
-		return nil, err
+		return nil, translateErr(err)
 	}
-
-	return user, nil
+	return toDomainUser(user), nil
 }
 
-func (r *UserRepositoryImpl) FindByEmail(ctx context.Context, email string) (*models.User, error) {
-	user, err := models.Users.Query(
-		models.SelectWhere.Users.Email.EQ(email),
-		models.SelectWhere.Users.DeletedAt.IsNull(),
-	).One(ctx, r.db.Exec)
-	if err != nil {
-		return nil, err
-	}
-
-	return user, nil
+func (r *UserRepositoryImpl) FindByID(ctx context.Context, id int64) (*domain.User, error) {
+	return one(r.queries(ctx).GetUserByID(ctx, id))
 }
 
-func (r *UserRepositoryImpl) FindByPhone(ctx context.Context, phone string) (*models.User, error) {
-	user, err := models.Users.Query(
-		models.SelectWhere.Users.Phone.EQ(phone),
-		models.SelectWhere.Users.DeletedAt.IsNull(),
-	).One(ctx, r.db.Exec)
-	if err != nil {
-		return nil, err
-	}
-
-	return user, nil
+func (r *UserRepositoryImpl) FindByEmail(ctx context.Context, email string) (*domain.User, error) {
+	return one(r.queries(ctx).GetUserByEmail(ctx, database.NullString(email)))
 }
 
-func (r *UserRepositoryImpl) FindByID(ctx context.Context, id int64) (*models.User, error) {
-	user, err := models.Users.Query(
-		models.SelectWhere.Users.ID.EQ(id),
-		models.SelectWhere.Users.DeletedAt.IsNull(),
-	).One(ctx, r.db.Exec)
-	if err != nil {
-		return nil, err
-	}
-
-	return user, nil
+func (r *UserRepositoryImpl) FindByPhone(ctx context.Context, phone string) (*domain.User, error) {
+	return one(r.queries(ctx).GetUserByPhone(ctx, database.NullString(phone)))
 }
 
-func (r *UserRepositoryImpl) UpdateByID(ctx context.Context, id int64, setter *models.UserSetter) (*models.User, error) {
-	setter.UpdatedAt = omitnull.From(time.Now().UTC())
-
-	user, err := models.Users.Update(
-		models.UpdateWhere.Users.ID.EQ(id),
-		models.UpdateWhere.Users.DeletedAt.IsNull(),
-		setter.UpdateMod(),
-	).One(ctx, r.db.Exec)
-	if err != nil {
-		return nil, err
-	}
-
-	return user, nil
+func (r *UserRepositoryImpl) UpdateProfile(ctx context.Context, id int64, params UpdateProfileParams) (*domain.User, error) {
+	return one(r.queries(ctx).UpdateUserProfile(ctx, sqlcgen.UpdateUserProfileParams{
+		Name:      database.NullStringPtr(params.Name),
+		Phone:     database.NullStringPtr(params.Phone),
+		UpdatedBy: params.UpdatedBy,
+		ID:        id,
+	}))
 }
 
-func (r *UserRepositoryImpl) UpdatePasswordWithExec(ctx context.Context, exec bob.Executor, userID int64, hashedPassword string) error {
-	setter := &models.UserSetter{
-		Password:  omit.From(hashedPassword),
-		UpdatedAt: omitnull.From(time.Now().UTC()),
-		UpdatedBy: omit.From(userID),
-	}
+func (r *UserRepositoryImpl) UpdatePassword(ctx context.Context, userID int64, hashedPassword string) error {
+	return requireRow(r.queries(ctx).UpdateUserPassword(ctx, sqlcgen.UpdateUserPasswordParams{
+		Password: hashedPassword,
+		ID:       userID,
+	}))
+}
 
-	_, err := models.Users.Update(
-		models.UpdateWhere.Users.ID.EQ(userID),
-		models.UpdateWhere.Users.DeletedAt.IsNull(),
-		setter.UpdateMod(),
-	).One(ctx, exec)
-
-	return err
+func (r *UserRepositoryImpl) MarkEmailVerified(ctx context.Context, userID int64, verifiedAt time.Time) error {
+	return requireRow(r.queries(ctx).MarkUserEmailVerified(ctx, sqlcgen.MarkUserEmailVerifiedParams{
+		VerifiedAt: sql.NullTime{Time: verifiedAt, Valid: true},
+		ID:         userID,
+	}))
 }
 
 func (r *UserRepositoryImpl) SoftDeleteByID(ctx context.Context, id int64, deletedBy int64) error {
-	now := time.Now().UTC()
+	return requireRow(r.queries(ctx).SoftDeleteUser(ctx, sqlcgen.SoftDeleteUserParams{
+		DeletedBy: sql.NullInt64{Int64: deletedBy, Valid: true},
+		ID:        id,
+	}))
+}
 
-	setter := &models.UserSetter{
-		DeletedAt: omitnull.From(now),
-		DeletedBy: omitnull.From(deletedBy),
-		UpdatedAt: omitnull.From(now),
-		UpdatedBy: omit.From(deletedBy),
+// one maps a single-row query result to the domain, translating errors.
+func one(user sqlcgen.User, err error) (*domain.User, error) {
+	if err != nil {
+		return nil, translateErr(err)
 	}
+	return toDomainUser(user), nil
+}
 
-	_, err := models.Users.Update(
-		models.UpdateWhere.Users.ID.EQ(id),
-		models.UpdateWhere.Users.DeletedAt.IsNull(),
-		setter.UpdateMod(),
-	).One(ctx, r.db.Exec)
+// requireRow turns "no row affected" into domain.ErrNotFound.
+func requireRow(affected int64, err error) error {
+	if err != nil {
+		return translateErr(err)
+	}
+	if affected == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
 
+func translateErr(err error) error {
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.ErrNotFound
+	}
+	if constraint, ok := database.UniqueViolationConstraint(err); ok {
+		switch constraint {
+		case emailUniqueIndex:
+			return domain.ErrEmailTaken
+		case phoneUniqueIndex:
+			return domain.ErrPhoneTaken
+		}
+	}
 	return err
+}
+
+func toDomainUser(u sqlcgen.User) *domain.User {
+	return &domain.User{
+		ID:         u.ID,
+		Name:       u.Name.String,
+		Email:      u.Email.String,
+		Phone:      u.Phone.String,
+		Password:   u.Password,
+		LoginType:  u.LoginType,
+		IsVerified: u.IsVerified.Bool,
+		VerifiedAt: database.TimePtr(u.VerifiedAt),
+		CreatedAt:  u.CreatedAt.Time,
+		UpdatedAt:  u.UpdatedAt.Time,
+	}
 }

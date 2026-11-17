@@ -27,3 +27,9 @@ packages:
       outpkg: mocks
     interfaces:
       AuthService:
+  github.com/letenk/golang-authentication/internal/applications/transaction:
+    config:
+      dir: "{{.InterfaceDir}}/mocks"
+      outpkg: mocks
+    interfaces:
+      TrxService:

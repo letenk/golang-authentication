@@ -52,10 +52,10 @@ func (controller *AuthController) Register(ctx echo.Context) error {
 	successResponse := &dto.RegisterResponse{
 		User: &dto.UserResponse{
 			ID:         result.ID,
-			FullName:   result.Name.GetOr(""),
-			Email:      result.Email.GetOr(""),
-			Phone:      result.Phone.GetOr(""),
-			IsVerified: result.IsVerified.GetOr(false),
+			FullName:   result.Name,
+			Email:      result.Email,
+			Phone:      result.Phone,
+			IsVerified: result.IsVerified,
 		},
 	}
 

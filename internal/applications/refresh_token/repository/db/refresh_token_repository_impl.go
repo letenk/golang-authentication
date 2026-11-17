@@ -2,139 +2,124 @@ package repository
 
 import (
 	"context"
-	"time"
+	"database/sql"
+	"errors"
 
-	"github.com/aarondl/opt/omitnull"
-	"github.com/letenk/golang-authentication/bob/models"
 	"github.com/letenk/golang-authentication/configs/database"
-	"github.com/stephenafamo/bob/dialect/psql/sm"
+	"github.com/letenk/golang-authentication/db/sqlcgen"
+	"github.com/letenk/golang-authentication/internal/domain"
 )
 
 type RefreshTokenRepositoryImpl struct {
-	db *database.BobDB
+	db *database.Postgres
 }
 
-func NewRefreshTokenRepository(db *database.BobDB) *RefreshTokenRepositoryImpl {
+func NewRefreshTokenRepository(db *database.Postgres) *RefreshTokenRepositoryImpl {
 	return &RefreshTokenRepositoryImpl{db: db}
 }
 
-func (r *RefreshTokenRepositoryImpl) Create(ctx context.Context, entity *models.RefreshTokenSetter) (*models.RefreshToken, error) {
-	result, err := models.RefreshTokens.Insert(entity).One(ctx, r.db.Exec)
+// queries runs on the transaction carried by ctx, or on the pool.
+func (r *RefreshTokenRepositoryImpl) queries(ctx context.Context) *sqlcgen.Queries {
+	return sqlcgen.New(r.db.Conn(ctx))
+}
+
+func (r *RefreshTokenRepositoryImpl) Create(ctx context.Context, params CreateRefreshTokenParams) (*domain.RefreshToken, error) {
+	token, err := r.queries(ctx).CreateRefreshToken(ctx, sqlcgen.CreateRefreshTokenParams{
+		UserID:     params.UserID,
+		Token:      params.Token,
+		DeviceName: storedAsGiven(params.DeviceName),
+		DeviceID:   storedAsGiven(params.DeviceID),
+		IpAddress:  storedAsGiven(params.IPAddress),
+		UserAgent:  storedAsGiven(params.UserAgent),
+		ExpiresAt:  params.ExpiresAt,
+	})
 	if err != nil {
 		return nil, err
+	}
+	return toDomainRefreshToken(token), nil
+}
+
+func (r *RefreshTokenRepositoryImpl) FindByToken(ctx context.Context, token string) (*domain.RefreshToken, error) {
+	rt, err := r.queries(ctx).GetRefreshTokenByToken(ctx, token)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, err
+	}
+	return toDomainRefreshToken(rt), nil
+}
+
+func (r *RefreshTokenRepositoryImpl) FindActiveByUserID(ctx context.Context, userID int64) ([]*domain.RefreshToken, error) {
+	tokens, err := r.queries(ctx).ListActiveRefreshTokensByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*domain.RefreshToken, 0, len(tokens))
+	for _, t := range tokens {
+		result = append(result, toDomainRefreshToken(t))
 	}
 	return result, nil
 }
 
-func (r *RefreshTokenRepositoryImpl) FindByToken(ctx context.Context, token string) (*models.RefreshToken, error) {
-	refreshToken, err := models.RefreshTokens.Query(
-		models.SelectWhere.RefreshTokens.Token.EQ(token),
-	).One(ctx, r.db.Exec)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return refreshToken, nil
-}
-
-func (r *RefreshTokenRepositoryImpl) FindActiveByUserID(ctx context.Context, userID int64) ([]*models.RefreshToken, error) {
-	now := time.Now().UTC()
-
-	tokens, err := models.RefreshTokens.Query(
-		models.SelectWhere.RefreshTokens.UserID.EQ(userID),
-		models.SelectWhere.RefreshTokens.RevokedAt.IsNull(),
-		models.SelectWhere.RefreshTokens.ExpiresAt.GT(now),
-		sm.OrderBy(models.RefreshTokens.Columns.CreatedAt).Desc(),
-	).All(ctx, r.db.Exec)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return tokens, nil
-}
-
 func (r *RefreshTokenRepositoryImpl) CountActiveByUserID(ctx context.Context, userID int64) (int, error) {
-	now := time.Now().UTC()
-
-	count, err := models.RefreshTokens.Query(
-		models.SelectWhere.RefreshTokens.UserID.EQ(userID),
-		models.SelectWhere.RefreshTokens.RevokedAt.IsNull(),
-		models.SelectWhere.RefreshTokens.ExpiresAt.GT(now),
-	).Count(ctx, r.db.Exec)
-
-	if err != nil {
-		return 0, err
-	}
-
-	return int(count), nil
+	n, err := r.queries(ctx).CountActiveRefreshTokensByUserID(ctx, userID)
+	return int(n), err
 }
 
 func (r *RefreshTokenRepositoryImpl) Revoke(ctx context.Context, token string) error {
-	now := time.Now().UTC()
-
-	setter := &models.RefreshTokenSetter{
-		RevokedAt: omitnull.From(now),
-	}
-
-	_, err := models.RefreshTokens.Update(
-		models.UpdateWhere.RefreshTokens.Token.EQ(token),
-		setter.UpdateMod(),
-	).One(ctx, r.db.Exec)
-
-	return err
+	return requireRow(r.queries(ctx).RevokeRefreshToken(ctx, token))
 }
 
 func (r *RefreshTokenRepositoryImpl) ReplaceToken(ctx context.Context, oldToken, newToken string) error {
-	now := time.Now().UTC()
-
-	setter := &models.RefreshTokenSetter{
-		RevokedAt:       omitnull.From(now),
-		ReplacedByToken: omitnull.From(newToken),
-	}
-
-	_, err := models.RefreshTokens.Update(
-		models.UpdateWhere.RefreshTokens.Token.EQ(oldToken),
-		setter.UpdateMod(),
-	).One(ctx, r.db.Exec)
-
-	return err
+	return requireRow(r.queries(ctx).ReplaceRefreshToken(ctx, sqlcgen.ReplaceRefreshTokenParams{
+		Token:           oldToken,
+		ReplacedByToken: sql.NullString{String: newToken, Valid: true},
+	}))
 }
 
 func (r *RefreshTokenRepositoryImpl) RevokeByIDForUser(ctx context.Context, sessionID int64, userID int64) error {
-	now := time.Now().UTC()
-
-	setter := &models.RefreshTokenSetter{
-		RevokedAt: omitnull.From(now),
-	}
-
-	_, err := models.RefreshTokens.Update(
-		models.UpdateWhere.RefreshTokens.ID.EQ(sessionID),
-		models.UpdateWhere.RefreshTokens.UserID.EQ(userID),
-		models.UpdateWhere.RefreshTokens.RevokedAt.IsNull(),
-		setter.UpdateMod(),
-	).One(ctx, r.db.Exec)
-
-	return err
+	return requireRow(r.queries(ctx).RevokeRefreshTokenByIDForUser(ctx, sqlcgen.RevokeRefreshTokenByIDForUserParams{
+		ID:     sessionID,
+		UserID: userID,
+	}))
 }
 
 func (r *RefreshTokenRepositoryImpl) RevokeAllByUserID(ctx context.Context, userID int64) (int, error) {
-	now := time.Now().UTC()
+	n, err := r.queries(ctx).RevokeAllRefreshTokensByUserID(ctx, userID)
+	return int(n), err
+}
 
-	setter := &models.RefreshTokenSetter{
-		RevokedAt: omitnull.From(now),
-	}
-
-	result, err := models.RefreshTokens.Update(
-		models.UpdateWhere.RefreshTokens.UserID.EQ(userID),
-		models.UpdateWhere.RefreshTokens.RevokedAt.IsNull(),
-		setter.UpdateMod(),
-	).Exec(ctx, r.db.Exec)
-
+// requireRow turns "no row affected" into domain.ErrNotFound.
+func requireRow(affected int64, err error) error {
 	if err != nil {
-		return 0, err
+		return err
 	}
+	if affected == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
 
-	return int(result), nil
+// storedAsGiven keeps "" as an empty string (not NULL), matching how device
+// fields have always been written.
+func storedAsGiven(s string) sql.NullString {
+	return sql.NullString{String: s, Valid: true}
+}
+
+func toDomainRefreshToken(t sqlcgen.RefreshToken) *domain.RefreshToken {
+	return &domain.RefreshToken{
+		ID:              t.ID,
+		UserID:          t.UserID,
+		Token:           t.Token,
+		DeviceName:      t.DeviceName.String,
+		DeviceID:        t.DeviceID.String,
+		IPAddress:       t.IpAddress.String,
+		UserAgent:       t.UserAgent.String,
+		ExpiresAt:       t.ExpiresAt,
+		CreatedAt:       t.CreatedAt.Time,
+		RevokedAt:       database.TimePtr(t.RevokedAt),
+		ReplacedByToken: t.ReplacedByToken.String,
+	}
 }

@@ -33,7 +33,7 @@ func main() {
 
 	cfg := credential.Config
 
-	dbConnection, err := database.NewSqlBobClient(&cfg.Database.Configs)
+	dbConnection, err := database.NewPostgres(&cfg.Database.Configs)
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}
@@ -47,10 +47,10 @@ func main() {
 
 	log.Info("Initialized JWT configuration")
 
-	defer func(dbConnection *database.BobDB) {
+	defer func(dbConnection *database.Postgres) {
 		err := dbConnection.DB.Close()
 		if err != nil {
-			log.Fatalf("error initialized database configuration=", err)
+			log.Fatalf("failed to close database connection: %v", err)
 		}
 	}(dbConnection)
 

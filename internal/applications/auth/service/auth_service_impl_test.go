@@ -2,23 +2,22 @@ package service_test
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"testing"
 	"time"
 
-	"github.com/aarondl/opt/null"
-	"github.com/letenk/golang-authentication/bob/models"
 	"github.com/letenk/golang-authentication/configs/credential"
 	"github.com/letenk/golang-authentication/configs/jwt_config"
 	"github.com/letenk/golang-authentication/exceptions"
 	"github.com/letenk/golang-authentication/internal/applications/auth/dto"
 	"github.com/letenk/golang-authentication/internal/applications/auth/service"
 	emailSvcMocks "github.com/letenk/golang-authentication/internal/applications/email/service/mocks"
+	otpRepo "github.com/letenk/golang-authentication/internal/applications/otp/repository/db"
 	otpRepoMocks "github.com/letenk/golang-authentication/internal/applications/otp/repository/db/mocks"
 	refreshMocks "github.com/letenk/golang-authentication/internal/applications/refresh_token/repository/db/mocks"
 	trxMocks "github.com/letenk/golang-authentication/internal/applications/transaction/mocks"
 	userMocks "github.com/letenk/golang-authentication/internal/applications/user/repository/db/mocks"
+	"github.com/letenk/golang-authentication/internal/domain"
 	"github.com/letenk/golang-authentication/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -42,6 +41,12 @@ func newTestJWTConfig(t *testing.T) *jwt_config.JWTConfig {
 
 func newTestService(t *testing.T) (*service.AuthServiceImpl, *userMocks.MockUserRepository, *refreshMocks.MockRefreshTokenRepository) {
 	t.Helper()
+	svc, mockUser, mockToken, _ := newTestServiceWithOTP(t)
+	return svc, mockUser, mockToken
+}
+
+func newTestServiceWithOTP(t *testing.T) (*service.AuthServiceImpl, *userMocks.MockUserRepository, *refreshMocks.MockRefreshTokenRepository, *otpRepoMocks.MockOTPRepository) {
+	t.Helper()
 	mockUser := userMocks.NewMockUserRepository(t)
 	mockToken := refreshMocks.NewMockRefreshTokenRepository(t)
 	mockOTP := otpRepoMocks.NewMockOTPRepository(t)
@@ -56,21 +61,26 @@ func newTestService(t *testing.T) (*service.AuthServiceImpl, *userMocks.MockUser
 	mockEmail.On("SendVerificationOTP", mock.Anything, mock.Anything, mock.Anything).Maybe().Return(nil)
 
 	svc := service.NewAuthService(mockTrx, mockUser, mockToken, mockOTP, mockEmail, newTestJWTConfig(t), otpConfig)
-	return svc, mockUser, mockToken
+	return svc, mockUser, mockToken, mockOTP
 }
 
-func newTestUser(id int64, email, phone, hashedPassword string) *models.User {
-	u := &models.User{
-		ID:         id,
-		Password:   hashedPassword,
-		LoginType:  "email",
-		IsVerified: null.From(false),
+func assertBusinessCode(t *testing.T, err error, code int) {
+	t.Helper()
+	var bizErr *exceptions.BusinessLogicError
+	if assert.True(t, errors.As(err, &bizErr), "got %v", err) {
+		assert.Equal(t, code, bizErr.ErrorCode)
 	}
-	if email != "" {
-		u.Email = null.From(email)
+}
+
+func newTestUser(id int64, email, phone, hashedPassword string) *domain.User {
+	u := &domain.User{
+		ID:        id,
+		Email:     email,
+		Phone:     phone,
+		Password:  hashedPassword,
+		LoginType: "email",
 	}
 	if phone != "" {
-		u.Phone = null.From(phone)
 		if email == "" {
 			u.LoginType = "phone"
 		}
@@ -78,23 +88,24 @@ func newTestUser(id int64, email, phone, hashedPassword string) *models.User {
 	return u
 }
 
-func newActiveToken(userID int64, token string) *models.RefreshToken {
-	return &models.RefreshToken{
+func newActiveToken(userID int64, token string) *domain.RefreshToken {
+	return &domain.RefreshToken{
 		ID:         1,
 		UserID:     userID,
 		Token:      token,
-		DeviceName: null.From("Test Device"),
+		DeviceName: "Test Device",
 		ExpiresAt:  time.Now().Add(7 * 24 * time.Hour),
 	}
 }
 
-func newRevokedToken(userID int64, token string) *models.RefreshToken {
+func newRevokedToken(userID int64, token string) *domain.RefreshToken {
 	rt := newActiveToken(userID, token)
-	rt.RevokedAt = null.From(time.Now())
+	revokedAt := time.Now()
+	rt.RevokedAt = &revokedAt
 	return rt
 }
 
-func newExpiredToken(userID int64, token string) *models.RefreshToken {
+func newExpiredToken(userID int64, token string) *domain.RefreshToken {
 	rt := newActiveToken(userID, token)
 	rt.ExpiresAt = time.Now().Add(-1 * time.Hour)
 	return rt
@@ -109,6 +120,7 @@ func TestAuthService_Register(t *testing.T) {
 		setupMock func(mu *userMocks.MockUserRepository)
 		wantErr   bool
 		errType   interface{}
+		wantCode  int
 	}{
 		{
 			name: "success register via email",
@@ -118,11 +130,11 @@ func TestAuthService_Register(t *testing.T) {
 				Password: "Password1!",
 			},
 			setupMock: func(mu *userMocks.MockUserRepository) {
-				mu.EXPECT().FindByEmail(mock.Anything, "test@example.com").Return(nil, sql.ErrNoRows)
+				mu.EXPECT().FindByEmail(mock.Anything, "test@example.com").Return(nil, domain.ErrNotFound)
 				mu.EXPECT().Create(mock.Anything, mock.Anything).Return(newTestUser(1, "test@example.com", "", "hashed"), nil)
 				// Allow async goroutine (SendVerificationEmail) to call FindByID.
 				// Returns ErrNoRows so the goroutine exits early without further calls.
-				mu.On("FindByID", mock.Anything, mock.Anything).Maybe().Return(nil, sql.ErrNoRows)
+				mu.On("FindByID", mock.Anything, mock.Anything).Maybe().Return(nil, domain.ErrNotFound)
 			},
 			wantErr: false,
 		},
@@ -134,7 +146,7 @@ func TestAuthService_Register(t *testing.T) {
 				Password: "Password1!",
 			},
 			setupMock: func(mu *userMocks.MockUserRepository) {
-				mu.EXPECT().FindByPhone(mock.Anything, "+628123456789").Return(nil, sql.ErrNoRows)
+				mu.EXPECT().FindByPhone(mock.Anything, "+628123456789").Return(nil, domain.ErrNotFound)
 				mu.EXPECT().Create(mock.Anything, mock.Anything).Return(newTestUser(1, "", "+628123456789", "hashed"), nil)
 			},
 			wantErr: false,
@@ -163,6 +175,34 @@ func TestAuthService_Register(t *testing.T) {
 			wantErr: true,
 			errType: &exceptions.BusinessLogicError{},
 		},
+		{
+			// Pre-check passes (concurrent signup, or the email belongs to a
+			// soft-deleted account) but the unique index rejects the insert.
+			name: "email taken at insert",
+			param: &dto.ParameterRegister{
+				Email:    "race@example.com",
+				Password: "Password1!",
+			},
+			setupMock: func(mu *userMocks.MockUserRepository) {
+				mu.EXPECT().FindByEmail(mock.Anything, "race@example.com").Return(nil, domain.ErrNotFound)
+				mu.EXPECT().Create(mock.Anything, mock.Anything).Return(nil, domain.ErrEmailTaken)
+			},
+			wantErr:  true,
+			wantCode: exceptions.DataConflict,
+		},
+		{
+			name: "phone taken at insert",
+			param: &dto.ParameterRegister{
+				Phone:    "+628123456789",
+				Password: "Password1!",
+			},
+			setupMock: func(mu *userMocks.MockUserRepository) {
+				mu.EXPECT().FindByPhone(mock.Anything, "+628123456789").Return(nil, domain.ErrNotFound)
+				mu.EXPECT().Create(mock.Anything, mock.Anything).Return(nil, domain.ErrPhoneTaken)
+			},
+			wantErr:  true,
+			wantCode: exceptions.DataConflict,
+		},
 	}
 
 	for _, tt := range tests {
@@ -179,6 +219,12 @@ func TestAuthService_Register(t *testing.T) {
 				assert.Error(t, err)
 				if tt.errType != nil {
 					assert.True(t, errors.As(err, &tt.errType))
+				}
+				if tt.wantCode != 0 {
+					var bizErr *exceptions.BusinessLogicError
+					if assert.True(t, errors.As(err, &bizErr)) {
+						assert.Equal(t, tt.wantCode, bizErr.ErrorCode)
+					}
 				}
 				assert.Nil(t, result)
 			} else {
@@ -210,7 +256,7 @@ func TestAuthService_Login(t *testing.T) {
 			},
 			setupMock: func(mu *userMocks.MockUserRepository, mt *refreshMocks.MockRefreshTokenRepository) {
 				mu.EXPECT().FindByEmail(mock.Anything, "test@example.com").Return(newTestUser(1, "test@example.com", "", hashedPassword), nil)
-				mt.EXPECT().Create(mock.Anything, mock.Anything).Return(&models.RefreshToken{}, nil)
+				mt.EXPECT().Create(mock.Anything, mock.Anything).Return(&domain.RefreshToken{}, nil)
 			},
 			wantErr: false,
 		},
@@ -222,7 +268,7 @@ func TestAuthService_Login(t *testing.T) {
 			},
 			setupMock: func(mu *userMocks.MockUserRepository, mt *refreshMocks.MockRefreshTokenRepository) {
 				mu.EXPECT().FindByPhone(mock.Anything, "+628123456789").Return(newTestUser(1, "", "+628123456789", hashedPassword), nil)
-				mt.EXPECT().Create(mock.Anything, mock.Anything).Return(&models.RefreshToken{}, nil)
+				mt.EXPECT().Create(mock.Anything, mock.Anything).Return(&domain.RefreshToken{}, nil)
 			},
 			wantErr: false,
 		},
@@ -233,7 +279,7 @@ func TestAuthService_Login(t *testing.T) {
 				Password: testPassword,
 			},
 			setupMock: func(mu *userMocks.MockUserRepository, mt *refreshMocks.MockRefreshTokenRepository) {
-				mu.EXPECT().FindByEmail(mock.Anything, "notfound@example.com").Return(nil, sql.ErrNoRows)
+				mu.EXPECT().FindByEmail(mock.Anything, "notfound@example.com").Return(nil, domain.ErrNotFound)
 			},
 			wantErr: true,
 			checkErr: func(t *testing.T, err error) {
@@ -299,14 +345,14 @@ func TestAuthService_RefreshToken(t *testing.T) {
 			setupMock: func(mt *refreshMocks.MockRefreshTokenRepository) {
 				mt.EXPECT().FindByToken(mock.Anything, oldToken).Return(newActiveToken(1, oldToken), nil)
 				mt.EXPECT().ReplaceToken(mock.Anything, oldToken, mock.Anything).Return(nil)
-				mt.EXPECT().Create(mock.Anything, mock.Anything).Return(&models.RefreshToken{}, nil)
+				mt.EXPECT().Create(mock.Anything, mock.Anything).Return(&domain.RefreshToken{}, nil)
 			},
 			wantErr: false,
 		},
 		{
 			name: "token not found",
 			setupMock: func(mt *refreshMocks.MockRefreshTokenRepository) {
-				mt.EXPECT().FindByToken(mock.Anything, oldToken).Return(nil, sql.ErrNoRows)
+				mt.EXPECT().FindByToken(mock.Anything, oldToken).Return(nil, domain.ErrNotFound)
 			},
 			wantErr: true,
 			checkErr: func(t *testing.T, err error) {
@@ -337,6 +383,22 @@ func TestAuthService_RefreshToken(t *testing.T) {
 				var authErr *exceptions.AuthenticationError
 				assert.True(t, errors.As(err, &authErr))
 				assert.Equal(t, exceptions.AuthenticationTokenExpired, authErr.Code)
+			},
+		},
+		{
+			// Another request rotated the same token between FindByToken and
+			// ReplaceToken. No new token may be issued (the strict mock fails
+			// on an unexpected Create call).
+			name: "token rotated concurrently",
+			setupMock: func(mt *refreshMocks.MockRefreshTokenRepository) {
+				mt.EXPECT().FindByToken(mock.Anything, oldToken).Return(newActiveToken(1, oldToken), nil)
+				mt.EXPECT().ReplaceToken(mock.Anything, oldToken, mock.Anything).Return(domain.ErrNotFound)
+			},
+			wantErr: true,
+			checkErr: func(t *testing.T, err error) {
+				var authErr *exceptions.AuthenticationError
+				assert.True(t, errors.As(err, &authErr))
+				assert.Equal(t, exceptions.AuthenticationTokenRevoked, authErr.Code)
 			},
 		},
 	}
@@ -387,7 +449,7 @@ func TestAuthService_Logout(t *testing.T) {
 		{
 			name: "token not found",
 			setupMock: func(mt *refreshMocks.MockRefreshTokenRepository) {
-				mt.EXPECT().FindByToken(mock.Anything, token).Return(nil, sql.ErrNoRows)
+				mt.EXPECT().FindByToken(mock.Anything, token).Return(nil, domain.ErrNotFound)
 			},
 			wantErr: true,
 			checkErr: func(t *testing.T, err error) {
@@ -497,7 +559,7 @@ func TestAuthService_GetMe(t *testing.T) {
 			name:   "user not found",
 			userID: 99,
 			setupMock: func(mu *userMocks.MockUserRepository) {
-				mu.EXPECT().FindByID(mock.Anything, int64(99)).Return(nil, sql.ErrNoRows)
+				mu.EXPECT().FindByID(mock.Anything, int64(99)).Return(nil, domain.ErrNotFound)
 			},
 			wantErr: true,
 			checkErr: func(t *testing.T, err error) {
@@ -528,4 +590,118 @@ func TestAuthService_GetMe(t *testing.T) {
 			}
 		})
 	}
+}
+
+// --- OTP flows ---
+
+func TestAuthService_ResetPassword_InvalidOTP(t *testing.T) {
+	svc, mu, _, mo := newTestServiceWithOTP(t)
+	mu.EXPECT().FindByEmail(mock.Anything, "test@example.com").Return(newTestUser(1, "test@example.com", "", "hashed"), nil)
+	mo.EXPECT().FindValidByUserAndCode(mock.Anything, int64(1), otpRepo.OTPPurposePasswordReset, "00000").Return(nil, domain.ErrNotFound)
+
+	err := svc.ResetPassword(context.Background(), &dto.ResetPasswordRequest{Email: "test@example.com", OTP: "00000", NewPassword: "Password1!"})
+
+	assertBusinessCode(t, err, exceptions.InvalidArgument)
+}
+
+func TestAuthService_ResetPassword_UnknownEmail(t *testing.T) {
+	svc, mu, _, _ := newTestServiceWithOTP(t)
+	mu.EXPECT().FindByEmail(mock.Anything, "nobody@example.com").Return(nil, domain.ErrNotFound)
+
+	err := svc.ResetPassword(context.Background(), &dto.ResetPasswordRequest{Email: "nobody@example.com", OTP: "00000", NewPassword: "Password1!"})
+
+	assertBusinessCode(t, err, exceptions.DataNotFound)
+}
+
+func TestAuthService_VerifyEmail_InvalidOTP(t *testing.T) {
+	svc, _, _, mo := newTestServiceWithOTP(t)
+	mo.EXPECT().FindValidByUserAndCode(mock.Anything, int64(1), otpRepo.OTPPurposeEmailVerification, "00000").Return(nil, domain.ErrNotFound)
+
+	err := svc.VerifyEmail(context.Background(), 1, "00000")
+
+	assertBusinessCode(t, err, exceptions.InvalidArgument)
+}
+
+func TestAuthService_ForgotPassword_UnknownEmailIsSilent(t *testing.T) {
+	svc, mu, _, _ := newTestServiceWithOTP(t)
+	mu.EXPECT().FindByEmail(mock.Anything, "nobody@example.com").Return(nil, domain.ErrNotFound)
+
+	err := svc.ForgotPassword(context.Background(), "nobody@example.com")
+
+	assert.NoError(t, err, "must not reveal whether the email exists")
+}
+
+// --- Transactional bodies ---
+//
+// newTestServiceRunningTx returns a service whose TrxService mock actually runs
+// the WithTx closure, passing a context tagged with txMarker. Repository
+// expectations use inTx to assert the call received the transaction context.
+
+type txMarker struct{}
+
+var inTx = mock.MatchedBy(func(ctx context.Context) bool {
+	marked, _ := ctx.Value(txMarker{}).(bool)
+	return marked
+})
+
+func newTestServiceRunningTx(t *testing.T) (*service.AuthServiceImpl, *userMocks.MockUserRepository, *otpRepoMocks.MockOTPRepository) {
+	t.Helper()
+	mockUser := userMocks.NewMockUserRepository(t)
+	mockOTP := otpRepoMocks.NewMockOTPRepository(t)
+	mockTrx := trxMocks.NewMockTrxService(t)
+	mockTrx.EXPECT().WithTx(mock.Anything, mock.Anything).RunAndReturn(
+		func(ctx context.Context, fn func(context.Context) error) error {
+			return fn(context.WithValue(ctx, txMarker{}, true))
+		})
+
+	svc := service.NewAuthService(mockTrx, mockUser, refreshMocks.NewMockRefreshTokenRepository(t), mockOTP,
+		emailSvcMocks.NewMockEmailService(t), newTestJWTConfig(t), &credential.OTPConfig{Expire: "5m", Length: 6})
+	return svc, mockUser, mockOTP
+}
+
+func TestAuthService_ResetPassword_WritesInsideTx(t *testing.T) {
+	svc, mu, mo := newTestServiceRunningTx(t)
+	mu.EXPECT().FindByEmail(mock.Anything, "test@example.com").Return(newTestUser(1, "test@example.com", "", "hashed"), nil)
+	mo.EXPECT().FindValidByUserAndCode(mock.Anything, int64(1), otpRepo.OTPPurposePasswordReset, "12345").Return(&domain.OTP{ID: 7, UserID: 1}, nil)
+	mo.EXPECT().MarkUsed(inTx, int64(7)).Return(nil)
+	mu.EXPECT().UpdatePassword(inTx, int64(1), mock.Anything).Return(nil)
+
+	err := svc.ResetPassword(context.Background(), &dto.ResetPasswordRequest{Email: "test@example.com", OTP: "12345", NewPassword: "Password1!"})
+
+	assert.NoError(t, err)
+}
+
+func TestAuthService_ResetPassword_OTPAlreadyConsumed(t *testing.T) {
+	svc, mu, mo := newTestServiceRunningTx(t)
+	mu.EXPECT().FindByEmail(mock.Anything, "test@example.com").Return(newTestUser(1, "test@example.com", "", "hashed"), nil)
+	mo.EXPECT().FindValidByUserAndCode(mock.Anything, int64(1), otpRepo.OTPPurposePasswordReset, "12345").Return(&domain.OTP{ID: 7, UserID: 1}, nil)
+	// A parallel request consumed the OTP first. UpdatePassword must not run
+	// (the strict mock fails on an unexpected call).
+	mo.EXPECT().MarkUsed(inTx, int64(7)).Return(domain.ErrNotFound)
+
+	err := svc.ResetPassword(context.Background(), &dto.ResetPasswordRequest{Email: "test@example.com", OTP: "12345", NewPassword: "Password1!"})
+
+	assert.Error(t, err)
+}
+
+func TestAuthService_VerifyEmail_WritesInsideTx(t *testing.T) {
+	svc, mu, mo := newTestServiceRunningTx(t)
+	mo.EXPECT().FindValidByUserAndCode(mock.Anything, int64(1), otpRepo.OTPPurposeEmailVerification, "12345").Return(&domain.OTP{ID: 9, UserID: 1}, nil)
+	mo.EXPECT().MarkUsed(inTx, int64(9)).Return(nil)
+	mu.EXPECT().MarkEmailVerified(inTx, int64(1), mock.Anything).Return(nil)
+
+	err := svc.VerifyEmail(context.Background(), 1, "12345")
+
+	assert.NoError(t, err)
+}
+
+func TestAuthService_VerifyEmail_UpdateFailsReturnsError(t *testing.T) {
+	svc, mu, mo := newTestServiceRunningTx(t)
+	mo.EXPECT().FindValidByUserAndCode(mock.Anything, int64(1), otpRepo.OTPPurposeEmailVerification, "12345").Return(&domain.OTP{ID: 9, UserID: 1}, nil)
+	mo.EXPECT().MarkUsed(inTx, int64(9)).Return(nil)
+	mu.EXPECT().MarkEmailVerified(inTx, int64(1), mock.Anything).Return(errors.New("db down"))
+
+	err := svc.VerifyEmail(context.Background(), 1, "12345")
+
+	assertBusinessCode(t, err, exceptions.DataUpdateFailed)
 }
