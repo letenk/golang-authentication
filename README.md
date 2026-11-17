@@ -57,7 +57,7 @@ The trade-off is that highly dynamic queries (many optional filters/sorts) are l
 
 ### This project moved from Bob to sqlc
 
-The boilerplate originally used [Bob](https://github.com/stephenafamo/bob). It was replaced because Bob is still pre-1.0 (frequent breaking minor releases), largely maintained by one person, and its generated code depends on the Bob runtime. The migration first decoupled services from Bob (repositories now expose only `internal/domain` types), then swapped each repository to sqlc; that swap touched repository files only, and the repository integration tests passed unchanged. See `docs/superpowers/specs/2026-11-15-bob-to-sqlc-design.md`.
+The boilerplate originally used [Bob](https://github.com/stephenafamo/bob). It was replaced because Bob is still pre-1.0 (frequent breaking minor releases), largely maintained by one person, and its generated code depends on the Bob runtime. The migration first decoupled services from Bob (repositories now expose only `internal/domain` types), then swapped each repository to sqlc; that swap touched repository files only, and the repository integration tests passed unchanged.
 
 ---
 
@@ -75,7 +75,6 @@ The boilerplate originally used [Bob](https://github.com/stephenafamo/bob). It w
 │   ├── database/                # DB connection, tx-in-context, NULL helpers
 │   ├── jwt_config/              # JWT sign/verify logic
 │   └── validator/               # Custom Echo validator
-├── docs/                        # Documentation and migration guides
 ├── exceptions/                  # Domain-level error types
 ├── internal/
 │   ├── adapter/rest/            # Echo server setup, middleware, routing
