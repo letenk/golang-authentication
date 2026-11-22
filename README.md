@@ -1,6 +1,6 @@
 # Go Auth System — Authentication Boilerplate Built with Production-Grade Patterns
 
-A well-architected authentication boilerplate built with Go, designed to be the starting point for any Go project that needs a solid auth foundation. The patterns and architecture here — type-safe SQL via sqlc, compile-time DI via Wire, token rotation, generic OTP system, internationally-aware phone normalization — are the same patterns you'd reach for in production code.
+A well-architected authentication boilerplate built with Go, designed to be the starting point for any Go project that needs a solid auth foundation. The patterns and architecture here — an SQL-first query builder kept behind repository interfaces, compile-time DI via Wire, token rotation, generic OTP system, internationally-aware phone normalization — are the same patterns you'd reach for in production code.
 
 This is a **foundation, not a finished production system**. Use it to skip the boilerplate; harden it for your production environment as you grow.
 
@@ -31,7 +31,7 @@ Every new project needs authentication. Instead of rebuilding the same patterns 
 | Layer | Library | Why |
 |---|---|---|
 | **HTTP Framework** | [Echo v4](https://github.com/labstack/echo) | Minimal, fast, great middleware ecosystem |
-| **Database access** | [sqlc v1.31](https://github.com/sqlc-dev/sqlc) | Type-safe Go generated from plain SQL; generated code has no runtime dependency |
+| **Database access** | [Bun v1.3](https://github.com/uptrace/bun) | SQL-first query builder on `database/sql`; handles dynamic filters/sorts; dialects for PostgreSQL, MySQL, SQLite, MSSQL |
 | **Database** | PostgreSQL | Battle-tested, feature-rich relational DB |
 | **Migrations** | [Goose v3](https://github.com/pressly/goose) | Simple, SQL-first migration tool |
 | **JWT** | [golang-jwt/jwt v5](https://github.com/golang-jwt/jwt) | Standard JWT library with full RFC support |
@@ -44,20 +44,70 @@ Every new project needs authentication. Instead of rebuilding the same patterns 
 
 ---
 
-## Why sqlc?
+## Why Bun?
 
-Database access is written as **plain SQL** in `db/queries/*.sql`. [sqlc](https://docs.sqlc.dev) reads those queries plus the goose migrations and generates type-safe Go in `db/sqlcgen/`.
+Repositories build queries with [Bun](https://bun.uptrace.dev), an SQL-first query builder that runs on top of the standard `database/sql` pool:
 
-- **Compile-time safety** — a renamed column or a wrong parameter type fails `make sqlc-gen` / `go build`, not production.
-- **No runtime dependency** — the generated code is plain `database/sql`. If sqlc were abandoned tomorrow, the code keeps working and can even be edited by hand.
-- **No database needed to generate** — the schema comes from `migrations/`, so `make sqlc-check` runs in CI without Postgres.
-- **Stable** — sqlc is v1 with a stable API and a large user base.
+```go
+err := r.db.NewSelect(ctx).Model(row).
+    Where("email = ?", email).
+    Where("deleted_at IS NULL").
+    Scan(ctx)
+```
 
-The trade-off is that highly dynamic queries (many optional filters/sorts) are less pleasant to express; use `sqlc.narg()` + `COALESCE` as in `UpdateUserProfile`, or a small query builder for that one query.
+- **Dynamic queries are easy** — optional filters and client-chosen sorting are plain `if` + `.Where(...)` / `.Order(...)`, which static-SQL generators handle poorly.
+- **Stable** — Bun is v1 with a stable API.
+- **Built on `database/sql`** — transactions stay `*sql.Tx` (see `TrxService`), so the transaction layer does not depend on Bun.
+- **Multi-dialect** — only PostgreSQL is used today, but placeholders are always `?` and timestamps use `CURRENT_TIMESTAMP`, so adding another database means a new dialect, migrations and an error translator — not rewriting queries.
 
-### This project moved from Bob to sqlc
+The trade-off: column names are checked when a query runs, not at build time. The repository integration tests (`make test-integration`) are therefore mandatory — every repository method is covered by one.
 
-The boilerplate originally used [Bob](https://github.com/stephenafamo/bob). It was replaced because Bob is still pre-1.0 (frequent breaking minor releases), largely maintained by one person, and its generated code depends on the Bob runtime. The migration first decoupled services from Bob (repositories now expose only `internal/domain` types), then swapped each repository to sqlc; that swap touched repository files only, and the repository integration tests passed unchanged.
+### Keeping Bun contained
+
+- Bun is imported only by `configs/database` and the repository packages. `internal/archtest` (part of `make test`) fails if a service, controller, DTO or `internal/domain` imports Bun or `database/sql`, and also rejects `bun`/`db`/`gorm` struct tags on `internal/domain` types.
+- Each repository has its own unexported row struct (`userRow`, `otpRow`, ...) and maps it to the domain type. Services only ever see `internal/domain`.
+- Queries are built only through `db.NewSelect/NewInsert/NewUpdate/NewDelete/NewRaw(ctx)`; the `*bun.DB` is unexported, so every query automatically joins the transaction carried by `ctx`.
+- The schema belongs to the goose migrations in `migrations/`; Bun never creates or alters tables.
+
+### Filtering and sorting (pattern for list endpoints)
+
+No endpoint lists with filters yet. When the first one is added, follow this shape so the criteria stay ORM-agnostic and safe:
+
+```go
+// internal/domain
+type UserSortField string
+
+const (
+    UserSortCreatedAt UserSortField = "created_at"
+    UserSortName      UserSortField = "name"
+)
+
+type UserFilter struct {
+    Name   *string
+    SortBy UserSortField
+    Desc   bool
+    Limit  int
+    Offset int
+}
+```
+
+- The service passes a `domain.UserFilter`; Bun query builders never leave the repository.
+- The repository maps `UserSortField` to a column through a whitelist and rejects anything else with an error. Never pass request input to `.Order()`: Bun quotes the identifier but accepts **any** column (sorting by `password` would leak information about hashes) and silently drops an invalid direction.
+- Filters always use placeholders — `Where("LOWER(name) LIKE LOWER(?)", "%"+*f.Name+"%")` — never string concatenation (and prefer portable SQL over Postgres-only operators such as `ILIKE`). Cap `Limit` in the repository.
+
+### Replacing the ORM or the database
+
+1. Make sure `make test-integration` is green on the current implementation.
+2. Rewrite one repository at a time; keep its interface and its `*_integration_test.go` file unchanged.
+3. Re-run the same integration tests — passing unchanged is the proof the behaviour is the same.
+4. Run `make test` so `internal/archtest` confirms nothing leaked out of the repositories.
+5. Remove the old library (`go mod tidy`).
+
+Changing the database additionally needs a Bun dialect in `configs/database`, migrations for that database, and a unique-violation translator in `configs/database/errors.go`.
+
+### History: Bob → sqlc → Bun
+
+The boilerplate originally used [Bob](https://github.com/stephenafamo/bob). It was replaced because Bob is still pre-1.0 (frequent breaking minor releases), largely maintained by one person, and its generated code depends on the Bob runtime. The migration first decoupled services from Bob (repositories now expose only `internal/domain` types), then swapped each repository to sqlc; that swap touched repository files only, and the repository integration tests passed unchanged. sqlc was later replaced by Bun because upcoming list endpoints need dynamic filtering and sorting, which sqlc's static queries express poorly; again only repositories and `configs/database` changed, and the integration tests passed unchanged.
 
 ---
 
@@ -65,14 +115,11 @@ The boilerplate originally used [Bob](https://github.com/stephenafamo/bob). It w
 
 ```
 .
-├── db/
-│   ├── queries/                 # Hand-written SQL, one file per table (edit these)
-│   └── sqlcgen/                 # sqlc generated code (do not edit manually)
 ├── cmd/
 │   └── main.go                  # Entry point
 ├── configs/
 │   ├── credential/              # Config structs + Viper initialization
-│   ├── database/                # DB connection, tx-in-context, NULL helpers
+│   ├── database/                # DB connection, Bun query constructors, tx-in-context
 │   ├── jwt_config/              # JWT sign/verify logic
 │   └── validator/               # Custom Echo validator
 ├── exceptions/                  # Domain-level error types
@@ -91,7 +138,6 @@ The boilerplate originally used [Bob](https://github.com/stephenafamo/bob). It w
 │   └── authentication/          # JWT middleware (Authenticate)
 ├── migrations/                  # SQL migration files (Goose)
 ├── .env-example                 # Environment variable template
-├── sqlc.yaml                    # sqlc code generation config
 ├── docker-compose.test.yml      # Disposable Postgres for integration tests
 ├── docker-compose.yml
 ├── Dockerfile
@@ -160,15 +206,7 @@ cp .env-example .env
 make migration-up
 ```
 
-### 3. Generate database code
-
-> Run this after changing a migration or a file in `db/queries/`. No database needed.
-
-```bash
-make sqlc-gen
-```
-
-### 4. Run the server
+### 3. Run the server
 
 ```bash
 make run
@@ -192,9 +230,6 @@ make test
 make test-db-up          # disposable Postgres on :55432 (or set TEST_DATABASE_URL)
 make test-integration
 make test-db-down
-
-# Fail if generated sqlc code is out of date (CI)
-make sqlc-check
 
 # Run tests with coverage report
 make test-coverage

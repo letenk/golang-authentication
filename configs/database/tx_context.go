@@ -5,8 +5,8 @@ import (
 	"database/sql"
 )
 
-// DBTX is the subset of *sql.DB / *sql.Tx that query code needs. It matches
-// the interface sqlc generates, so either value can be passed to it.
+// DBTX is the subset of *sql.DB / *sql.Tx that query code needs. Both values
+// satisfy it, and it satisfies bun.IConn, so Bun queries can run on either.
 type DBTX interface {
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
 	PrepareContext(context.Context, string) (*sql.Stmt, error)

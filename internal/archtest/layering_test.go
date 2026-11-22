@@ -1,6 +1,6 @@
 // Package archtest_test enforces the layering rule: services, controllers,
 // DTOs and the domain never depend on persistence code. Repositories are the
-// only place that may know about database/sql, sqlc or any ORM, which is what
+// only place that may know about database/sql, Bun or any ORM, which is what
 // lets the persistence library be replaced by rewriting repositories alone.
 package archtest_test
 
