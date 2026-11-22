@@ -66,7 +66,7 @@ func Open(t *testing.T) *database.Postgres {
 		t.Fatalf("pgtest: truncate tables: %v", err)
 	}
 
-	return &database.Postgres{DB: sqlDB}
+	return database.NewPostgresFromDB(sqlDB)
 }
 
 // requireTestDatabase refuses any database whose name does not end in "_test",

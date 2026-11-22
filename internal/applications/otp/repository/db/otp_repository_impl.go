@@ -6,7 +6,6 @@ import (
 	"errors"
 
 	"github.com/letenk/golang-authentication/configs/database"
-	"github.com/letenk/golang-authentication/db/sqlcgen"
 	"github.com/letenk/golang-authentication/internal/domain"
 )
 
@@ -18,38 +17,46 @@ func NewOTPRepository(db *database.Postgres) *OTPRepositoryImpl {
 	return &OTPRepositoryImpl{db: db}
 }
 
-// queries runs on the transaction carried by ctx, or on the pool.
-func (r *OTPRepositoryImpl) queries(ctx context.Context) *sqlcgen.Queries {
-	return sqlcgen.New(r.db.Conn(ctx))
-}
-
 func (r *OTPRepositoryImpl) Create(ctx context.Context, params CreateOTPParams) (*domain.OTP, error) {
-	otp, err := r.queries(ctx).CreateOTP(ctx, sqlcgen.CreateOTPParams{
+	row := &otpRow{
 		UserID:    params.UserID,
 		Code:      params.Code,
 		Purpose:   string(params.Purpose),
 		ExpiresAt: params.ExpiresAt,
-	})
-	if err != nil {
+	}
+	if _, err := r.db.NewInsert(ctx).Model(row).Returning("*").Exec(ctx); err != nil {
 		return nil, err
 	}
-	return toDomainOTP(otp), nil
+	return row.toDomain(), nil
 }
 
 func (r *OTPRepositoryImpl) FindValidByUserAndCode(ctx context.Context, userID int64, purpose OTPPurpose, code string) (*domain.OTP, error) {
-	otp, err := r.queries(ctx).FindValidOTP(ctx, sqlcgen.FindValidOTPParams{
-		UserID:  userID,
-		Purpose: string(purpose),
-		Code:    code,
-	})
+	row := new(otpRow)
+	err := r.db.NewSelect(ctx).Model(row).
+		Where("user_id = ?", userID).
+		Where("purpose = ?", string(purpose)).
+		Where("code = ?", code).
+		Where("expires_at > CURRENT_TIMESTAMP").
+		Where("used_at IS NULL").
+		Limit(1).
+		Scan(ctx)
 	if err != nil {
 		return nil, translateErr(err)
 	}
-	return toDomainOTP(otp), nil
+	return row.toDomain(), nil
 }
 
+// MarkUsed only consumes an unused OTP; 0 rows means it was already used.
 func (r *OTPRepositoryImpl) MarkUsed(ctx context.Context, id int64) error {
-	n, err := r.queries(ctx).MarkOTPUsed(ctx, id)
+	res, err := r.db.NewUpdate(ctx).Table("otps").
+		Set("used_at = CURRENT_TIMESTAMP").
+		Where("id = ?", id).
+		Where("used_at IS NULL").
+		Exec(ctx)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
 	if err != nil {
 		return err
 	}
@@ -60,10 +67,13 @@ func (r *OTPRepositoryImpl) MarkUsed(ctx context.Context, id int64) error {
 }
 
 func (r *OTPRepositoryImpl) InvalidatePreviousByUserIDAndPurpose(ctx context.Context, userID int64, purpose OTPPurpose) error {
-	return r.queries(ctx).InvalidateOTPsByUserAndPurpose(ctx, sqlcgen.InvalidateOTPsByUserAndPurposeParams{
-		UserID:  userID,
-		Purpose: string(purpose),
-	})
+	_, err := r.db.NewUpdate(ctx).Table("otps").
+		Set("used_at = CURRENT_TIMESTAMP").
+		Where("user_id = ?", userID).
+		Where("purpose = ?", string(purpose)).
+		Where("used_at IS NULL").
+		Exec(ctx)
+	return err
 }
 
 func translateErr(err error) error {
@@ -71,16 +81,4 @@ func translateErr(err error) error {
 		return domain.ErrNotFound
 	}
 	return err
-}
-
-func toDomainOTP(o sqlcgen.Otp) *domain.OTP {
-	return &domain.OTP{
-		ID:        o.ID,
-		UserID:    o.UserID,
-		Code:      o.Code,
-		Purpose:   o.Purpose,
-		ExpiresAt: o.ExpiresAt,
-		UsedAt:    database.TimePtr(o.UsedAt),
-		CreatedAt: o.CreatedAt.Time, // zero when NULL
-	}
 }

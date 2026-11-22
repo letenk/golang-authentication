@@ -6,9 +6,9 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/letenk/golang-authentication/db/sqlcgen"
+	"github.com/uptrace/bun"
 )
 
 var _ = fmt.Sprint
 var _ sql.NullString
-var _ sqlcgen.User
+var _ bun.IDB

@@ -3,11 +3,7 @@ include .env
 export
 
 # Build once, reuse
-.PHONY: run build test test-coverage test-db-up test-db-down test-integration migration-build migration-create migration-up migration-down migration-status sqlc-gen sqlc-check
-
-# sqlc is pinned; generated code has no runtime dependency on sqlc
-SQLC_VERSION := v1.31.1
-SQLC ?= go run github.com/sqlc-dev/sqlc/cmd/sqlc@$(SQLC_VERSION)
+.PHONY: run build test test-coverage test-db-up test-db-down test-integration migration-build migration-create migration-up migration-down migration-status
 
 # Disposable Postgres used by integration tests (see docker-compose.test.yml)
 TEST_DATABASE_URL ?= postgres://postgres:postgres@localhost:55432/auth_test?sslmode=disable
@@ -69,16 +65,6 @@ migration-version:
 	@if [ ! -f migration ]; then $(MAKE) migration-build; fi
 	./migration postgres version
 
-# Generate type-safe Go from db/queries/*.sql (schema read from migrations/, no DB needed).
-# Override SQLC to use a prebuilt binary, e.g. `make sqlc-gen SQLC=/path/to/sqlc`
-# (go run needs a working cgo toolchain).
-sqlc-gen:
-	$(SQLC) generate
-
-# Fail if generated code is out of date with queries/migrations (use in CI)
-sqlc-check:
-	$(SQLC) diff
-
 # Clean built binaries
 clean:
 	rm -f main migration
@@ -95,8 +81,6 @@ help:
 	@echo "  make migration-down     - Rollback last migration"
 	@echo "  make migration-status   - Show migration status"
 	@echo "  make migration-version  - Show current migration version"
-	@echo "  make sqlc-gen           - Generate Go from db/queries/*.sql (sqlc $(SQLC_VERSION))"
-	@echo "  make sqlc-check         - Fail if sqlc generated code is out of date"
 	@echo "  make test               - Run all tests"
 	@echo "  make test-coverage      - Run all tests with coverage report"
 	@echo "  make test-db-up         - Start disposable Postgres for integration tests"

@@ -1,14 +1,16 @@
 // Package archtest_test enforces the layering rule: services, controllers,
 // DTOs and the domain never depend on persistence code. Repositories are the
-// only place that may know about database/sql, sqlc or any ORM, which is what
+// only place that may know about database/sql, Bun or any ORM, which is what
 // lets the persistence library be replaced by rewriting repositories alone.
 package archtest_test
 
 import (
+	"go/ast"
 	"go/parser"
 	"go/token"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -26,7 +28,6 @@ const repoRoot = "../.."
 // repositories and configs/database may use.
 var ormAndPersistence = []string{
 	"database/sql",
-	module + "/db/sqlcgen",
 	module + "/configs/database",
 	"github.com/stephenafamo/bob",
 	"github.com/aarondl/opt",
@@ -74,6 +75,68 @@ func findViolations(dir string, forbidden []string) ([]string, error) {
 	return violations, nil
 }
 
+// findPersistenceTags parses every non-test .go file directly in dir and
+// returns "file: Struct.Field tag key" for each struct field whose tag uses one
+// of keys. Struct tags need no import, so findViolations cannot see them.
+func findPersistenceTags(dir string, keys []string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	var found []string
+	fset := token.NewFileSet()
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+
+		path := filepath.Join(dir, name)
+		file, err := parser.ParseFile(fset, path, nil, 0)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, decl := range file.Decls {
+			gen, ok := decl.(*ast.GenDecl)
+			if !ok || gen.Tok != token.TYPE {
+				continue
+			}
+			for _, spec := range gen.Specs {
+				ts := spec.(*ast.TypeSpec)
+				st, ok := ts.Type.(*ast.StructType)
+				if !ok {
+					continue
+				}
+				for _, field := range st.Fields.List {
+					if field.Tag == nil {
+						continue
+					}
+					raw, err := strconv.Unquote(field.Tag.Value)
+					if err != nil {
+						return nil, err
+					}
+					tag := reflect.StructTag(raw)
+					for _, key := range keys {
+						if _, ok := tag.Lookup(key); ok {
+							found = append(found, path+": "+ts.Name.Name+"."+fieldName(field)+" tag "+key)
+						}
+					}
+				}
+			}
+		}
+	}
+	return found, nil
+}
+
+func fieldName(f *ast.Field) string {
+	if len(f.Names) > 0 {
+		return f.Names[0].Name
+	}
+	return "(embedded)"
+}
+
 // globDirs expands patterns relative to the repo root and fails the test when
 // nothing matches, so moving a folder cannot silently disable the check.
 func globDirs(t *testing.T, patterns ...string) []string {
@@ -92,7 +155,7 @@ func TestFindViolations_DetectsLeakyFixture(t *testing.T) {
 	v, err := findViolations("testdata/leaky", ormAndPersistence)
 
 	require.NoError(t, err)
-	assert.Len(t, v, 2, "database/sql and db/sqlcgen; fmt is allowed: %v", v)
+	assert.Len(t, v, 2, "database/sql and bun; fmt is allowed: %v", v)
 }
 
 func TestLayering_ServiceControllerDTOHaveNoPersistenceImports(t *testing.T) {
@@ -116,5 +179,25 @@ func TestLayering_DomainImportsOnlyStdlib(t *testing.T) {
 		v, err := findViolations(dir, forbidden)
 		require.NoError(t, err)
 		assert.Empty(t, v, "internal/domain must import only the standard library")
+	}
+}
+
+// persistenceTagKeys are struct tag keys that bind a struct to an ORM or SQL
+// mapper. Domain structs must not carry them: the repository owns its own row
+// structs and maps them to the domain.
+var persistenceTagKeys = []string{"bun", "db", "gorm"}
+
+func TestFindPersistenceTags_DetectsTaggedFixture(t *testing.T) {
+	v, err := findPersistenceTags("testdata/taggeddomain", persistenceTagKeys)
+
+	require.NoError(t, err)
+	assert.Len(t, v, 2, "bun and db tags; json-only and untagged fields are allowed: %v", v)
+}
+
+func TestLayering_DomainHasNoPersistenceTags(t *testing.T) {
+	for _, dir := range globDirs(t, "internal/domain") {
+		v, err := findPersistenceTags(dir, persistenceTagKeys)
+		require.NoError(t, err)
+		assert.Empty(t, v, "internal/domain structs must not carry persistence tags; map from a repository row struct instead")
 	}
 }

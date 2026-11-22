@@ -9,12 +9,26 @@ import (
 	"github.com/letenk/golang-authentication/configs/credential"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/uptrace/bun"
+	"github.com/uptrace/bun/dialect/pgdialect"
 )
 
-// Postgres wraps the connection pool. Repositories reach it through Conn(ctx)
-// so they automatically join a transaction started by TrxService.
+// Postgres wraps the connection pool. Repositories build queries through the
+// New* methods in bun.go, which run on the transaction carried by ctx (started
+// by TrxService) or on the pool. The Bun handle is unexported so a repository
+// cannot accidentally run a query outside the caller's transaction.
 type Postgres struct {
-	DB *sql.DB
+	DB  *sql.DB
+	bun *bun.DB
+}
+
+// NewPostgresFromDB wraps an open pool. Bun shares the pool; no second
+// connection is opened.
+func NewPostgresFromDB(sqlDB *sql.DB) *Postgres {
+	return &Postgres{
+		DB:  sqlDB,
+		bun: bun.NewDB(sqlDB, pgdialect.New(), bun.WithDiscardUnknownColumns()),
+	}
 }
 
 func NewPostgres(cfg *credential.DBConnectionConfig) (*Postgres, error) {
@@ -37,7 +51,12 @@ func NewPostgres(cfg *credential.DBConnectionConfig) (*Postgres, error) {
 		return nil, fmt.Errorf("unable to ping database: %w", err)
 	}
 
-	return &Postgres{DB: db}, nil
+	if err := CheckStandardConformingStrings(context.Background(), db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+
+	return NewPostgresFromDB(db), nil
 }
 
 func (db *Postgres) HealthCheck(ctx context.Context) error {
