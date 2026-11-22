@@ -51,6 +51,11 @@ func NewPostgres(cfg *credential.DBConnectionConfig) (*Postgres, error) {
 		return nil, fmt.Errorf("unable to ping database: %w", err)
 	}
 
+	if err := CheckStandardConformingStrings(context.Background(), db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+
 	return NewPostgresFromDB(db), nil
 }
 

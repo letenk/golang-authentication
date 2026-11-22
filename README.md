@@ -58,7 +58,7 @@ err := r.db.NewSelect(ctx).Model(row).
 - **Dynamic queries are easy** — optional filters and client-chosen sorting are plain `if` + `.Where(...)` / `.Order(...)`, which static-SQL generators handle poorly.
 - **Stable** — Bun is v1 with a stable API.
 - **Built on `database/sql`** — transactions stay `*sql.Tx` (see `TrxService`), so the transaction layer does not depend on Bun.
-- **Multi-dialect** — only PostgreSQL is used today, but placeholders are always `?` and timestamps use `CURRENT_TIMESTAMP`, so adding another database means a new dialect, migrations and an error translator — not rewriting queries.
+- **Multi-dialect** — only PostgreSQL is used today, but placeholders are always `?` and timestamps use `CURRENT_TIMESTAMP`, so adding another database means a new dialect, migrations and an error translator, and rewriting only the few queries that use PostgreSQL-specific SQL. Today that is `RETURNING` in `Create` and `UpdateProfile` (MySQL has no `RETURNING`; those become INSERT/UPDATE followed by SELECT).
 
 The trade-off: column names are checked when a query runs, not at build time. The repository integration tests (`make test-integration`) are therefore mandatory — every repository method is covered by one.
 
@@ -66,7 +66,8 @@ The trade-off: column names are checked when a query runs, not at build time. Th
 
 - Bun is imported only by `configs/database` and the repository packages. `internal/archtest` (part of `make test`) fails if a service, controller, DTO or `internal/domain` imports Bun or `database/sql`, and also rejects `bun`/`db`/`gorm` struct tags on `internal/domain` types.
 - Each repository has its own unexported row struct (`userRow`, `otpRow`, ...) and maps it to the domain type. Services only ever see `internal/domain`.
-- Queries are built only through `db.NewSelect/NewInsert/NewUpdate/NewDelete/NewRaw(ctx)`; the `*bun.DB` is unexported, so every query automatically joins the transaction carried by `ctx`.
+- Build queries only through `db.NewSelect/NewInsert/NewUpdate/NewDelete/NewRaw(ctx)`; they join the transaction carried by `ctx`. The `*bun.DB` is unexported, so a repository cannot build a Bun query that skips the transaction. `db.DB` (the raw pool, used by `TrxService` and the health check) is still exported, so repositories must not call it directly — it would run outside the caller's transaction.
+- Bun substitutes `?` values into the SQL text on the client and escapes strings by doubling single quotes. That is safe only while PostgreSQL's `standard_conforming_strings` is `on` (the default), so `NewPostgres` refuses to start when it is off.
 - The schema belongs to the goose migrations in `migrations/`; Bun never creates or alters tables.
 
 ### Filtering and sorting (pattern for list endpoints)
@@ -92,8 +93,15 @@ type UserFilter struct {
 ```
 
 - The service passes a `domain.UserFilter`; Bun query builders never leave the repository.
-- The repository maps `UserSortField` to a column through a whitelist and rejects anything else with an error. Never pass request input to `.Order()`: Bun quotes the identifier but accepts **any** column (sorting by `password` would leak information about hashes) and silently drops an invalid direction.
-- Filters always use placeholders — `Where("LOWER(name) LIKE LOWER(?)", "%"+*f.Name+"%")` — never string concatenation (and prefer portable SQL over Postgres-only operators such as `ILIKE`). Cap `Limit` in the repository.
+- The repository maps `UserSortField` to a column through a whitelist and rejects anything else with an error. Never pass request input to `.Order()`: Bun quotes the identifier but accepts **any** column (sorting by `password` would leak information about hashes) and drops an invalid direction with only a log line, not an error.
+- Filters always use placeholders, never string concatenation. For a substring search, escape LIKE wildcards in the input first, otherwise a user can send `%` or `_` to match everything:
+
+  ```go
+  pattern := "%" + strings.NewReplacer(`\`, `\\`, "%", `\%`, "_", `\_`).Replace(*f.Name) + "%"
+  q = q.Where(`LOWER(name) LIKE LOWER(?) ESCAPE '\'`, pattern)
+  ```
+
+  Prefer portable SQL over PostgreSQL-only operators such as `ILIKE`. Cap `Limit` in the repository.
 
 ### Replacing the ORM or the database
 
