@@ -5,3 +5,6 @@ main
 migration
 
 /migration
+
+# Local-only documentation (notes, ebook drafts, plans); never published
+docs/

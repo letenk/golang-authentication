@@ -35,7 +35,7 @@ var providerSetAuth = wire.NewSet(
 
 // InitializeAuthService initializes all dependencies for AuthController
 func InitializeAuthService(
-	db *database.BobDB,
+	db *database.Postgres,
 	jwtConfig *jwt_config.JWTConfig,
 	emailService emailSvc.EmailService,
 	otpConfig *credential.OTPConfig,

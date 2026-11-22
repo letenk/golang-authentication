@@ -2,14 +2,10 @@ package service
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"time"
 
-	"github.com/aarondl/opt/omit"
-	"github.com/aarondl/opt/omitnull"
 	"github.com/labstack/gommon/log"
-	"github.com/letenk/golang-authentication/bob/models"
 	"github.com/letenk/golang-authentication/configs/credential"
 	"github.com/letenk/golang-authentication/configs/jwt_config"
 	"github.com/letenk/golang-authentication/exceptions"
@@ -19,8 +15,8 @@ import (
 	refreshTokenRepo "github.com/letenk/golang-authentication/internal/applications/refresh_token/repository/db"
 	"github.com/letenk/golang-authentication/internal/applications/transaction"
 	userRepo "github.com/letenk/golang-authentication/internal/applications/user/repository/db"
+	"github.com/letenk/golang-authentication/internal/domain"
 	"github.com/letenk/golang-authentication/internal/utils"
-	"github.com/stephenafamo/bob"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -54,11 +50,11 @@ func NewAuthService(
 	}
 }
 
-func (service *AuthServiceImpl) Register(ctx context.Context, param *dto.ParameterRegister) (*models.User, error) {
+func (service *AuthServiceImpl) Register(ctx context.Context, param *dto.ParameterRegister) (*domain.User, error) {
 	// Check if email already exists
 	if param.Email != "" {
 		existingUser, err := service.userRepository.FindByEmail(ctx, param.Email)
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		if err != nil && !errors.Is(err, domain.ErrNotFound) {
 			log.Errorf("failed to check email: %s", err)
 			return nil, exceptions.NewBusinessLogicError(exceptions.DataCreateFailed, errors.New("failed to check email"), nil)
 		}
@@ -76,7 +72,7 @@ func (service *AuthServiceImpl) Register(ctx context.Context, param *dto.Paramet
 		param.Phone = cleanedPhone
 
 		existingUser, err := service.userRepository.FindByPhone(ctx, param.Phone)
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		if err != nil && !errors.Is(err, domain.ErrNotFound) {
 			log.Errorf("failed to check phone: %s", err)
 			return nil, exceptions.NewBusinessLogicError(exceptions.DataCreateFailed, errors.New("failed to check phone"), nil)
 		}
@@ -92,39 +88,29 @@ func (service *AuthServiceImpl) Register(ctx context.Context, param *dto.Paramet
 		return nil, exceptions.NewBusinessLogicError(exceptions.DataCreateFailed, errors.New("failed to hash password"), nil)
 	}
 
-	// Prepare user data
-	data := models.UserSetter{
-		Password:  omit.From(hashedPassword),
-		CreatedBy: omit.From(int64(0)),
-		UpdatedBy: omit.From(int64(0)),
-	}
-
-	// Set optional fields
-	if param.FullName != "" {
-		data.Name = omitnull.From(param.FullName)
-	}
-
-	if param.Phone != "" {
-		data.Phone = omitnull.From(param.Phone)
-	}
-
-	if param.Email != "" {
-		data.Email = omitnull.From(param.Email)
-	}
-
 	// Determine login type
 	loginType := "email"
 	if param.Email == "" && param.Phone != "" {
 		loginType = "phone"
 	}
-	data.LoginType = omit.From(loginType)
 
-	// Set default values
-	data.IsVerified = omitnull.From(false)
-
-	// Create new user
-	result, err := service.userRepository.Create(ctx, &data)
+	// Create new user (created by the system user; empty fields stored as NULL)
+	result, err := service.userRepository.Create(ctx, userRepo.CreateUserParams{
+		Name:      param.FullName,
+		Email:     param.Email,
+		Phone:     param.Phone,
+		Password:  hashedPassword,
+		LoginType: loginType,
+	})
 	if err != nil {
+		// The pre-checks above can miss a concurrent registration or an
+		// email/phone still held by a soft-deleted account; the unique index catches both.
+		switch {
+		case errors.Is(err, domain.ErrEmailTaken):
+			return nil, exceptions.NewBusinessLogicError(exceptions.DataConflict, errors.New("email already registered"), nil)
+		case errors.Is(err, domain.ErrPhoneTaken):
+			return nil, exceptions.NewBusinessLogicError(exceptions.DataConflict, errors.New("phone already registered"), nil)
+		}
 		log.Errorf("failed to register user: %s", err)
 		return nil, exceptions.NewBusinessLogicError(exceptions.BadData, errors.New("failed to register user"), nil)
 	}
@@ -149,7 +135,7 @@ func (service *AuthServiceImpl) Register(ctx context.Context, param *dto.Paramet
 // Login authenticates user and returns access token with refresh token
 func (service *AuthServiceImpl) Login(ctx context.Context, req *dto.LoginRequest, ipAddress, userAgent string) (*dto.LoginResponse, error) {
 	// Find user by email or phone
-	var user *models.User
+	var user *domain.User
 	var err error
 
 	if req.Email != "" {
@@ -163,7 +149,7 @@ func (service *AuthServiceImpl) Login(ctx context.Context, req *dto.LoginRequest
 	}
 
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, domain.ErrNotFound) {
 			return nil, exceptions.NewAuthenticationError("Invalid credentials", exceptions.AuthenticationInvalidCredentials)
 		}
 		log.Errorf("failed to find user: %s", err)
@@ -192,18 +178,15 @@ func (service *AuthServiceImpl) Login(ctx context.Context, req *dto.LoginRequest
 		deviceName = "Unknown Device"
 	}
 
-	// Create refresh token record using Setter
-	tokenSetter := &models.RefreshTokenSetter{
-		UserID:     omit.From(user.ID),
-		Token:      omit.From(refreshToken),
-		DeviceName: omitnull.From(deviceName),
-		DeviceID:   omitnull.From(req.DeviceID),
-		IPAddress:  omitnull.From(ipAddress),
-		UserAgent:  omitnull.From(userAgent),
-		ExpiresAt:  omit.From(refreshExpiresAt),
-	}
-
-	_, err = service.tokenRepository.Create(ctx, tokenSetter)
+	_, err = service.tokenRepository.Create(ctx, refreshTokenRepo.CreateRefreshTokenParams{
+		UserID:     user.ID,
+		Token:      refreshToken,
+		DeviceName: deviceName,
+		DeviceID:   req.DeviceID,
+		IPAddress:  ipAddress,
+		UserAgent:  userAgent,
+		ExpiresAt:  refreshExpiresAt,
+	})
 	if err != nil {
 		log.Errorf("failed to create refresh token: %s", err)
 		return nil, exceptions.NewBusinessLogicError(exceptions.DataCreateFailed, errors.New("failed to create refresh token"), nil)
@@ -222,7 +205,7 @@ func (service *AuthServiceImpl) RefreshToken(ctx context.Context, req *dto.Refre
 	// Find the token in DB
 	token, err := service.tokenRepository.FindByToken(ctx, req.RefreshToken)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, domain.ErrNotFound) {
 			return nil, exceptions.NewAuthenticationError("Invalid refresh token", exceptions.AuthenticationInvalidToken)
 		}
 		log.Errorf("failed to find refresh token: %s", err)
@@ -230,12 +213,12 @@ func (service *AuthServiceImpl) RefreshToken(ctx context.Context, req *dto.Refre
 	}
 
 	// Check if already revoked
-	if token.RevokedAt.IsValue() {
+	if token.IsRevoked() {
 		return nil, exceptions.NewAuthenticationError("Refresh token has been revoked", exceptions.AuthenticationTokenRevoked)
 	}
 
 	// Check if expired
-	if token.ExpiresAt.Before(time.Now().UTC()) {
+	if token.IsExpired(time.Now().UTC()) {
 		return nil, exceptions.NewAuthenticationError("Refresh token has expired", exceptions.AuthenticationTokenExpired)
 	}
 
@@ -249,30 +232,32 @@ func (service *AuthServiceImpl) RefreshToken(ctx context.Context, req *dto.Refre
 	// Generate new refresh token
 	newRefreshToken, refreshExpiresAt := service.jwtConfig.GenerateRefreshToken()
 
-	// Token rotation: revoke old token and record which token replaced it
+	// Token rotation: revoke old token and record which token replaced it.
+	// ErrNotFound means a concurrent request already rotated this token.
 	err = service.tokenRepository.ReplaceToken(ctx, req.RefreshToken, newRefreshToken)
 	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, exceptions.NewAuthenticationError("Refresh token has been revoked", exceptions.AuthenticationTokenRevoked)
+		}
 		log.Errorf("failed to rotate refresh token: %s", err)
 		return nil, exceptions.NewBusinessLogicError(exceptions.DataUpdateFailed, errors.New("failed to rotate refresh token"), nil)
 	}
 
 	// Create new refresh token — carry over device info from the old token
-	deviceName := token.DeviceName.GetOrZero()
+	deviceName := token.DeviceName
 	if deviceName == "" {
 		deviceName = "Unknown Device"
 	}
 
-	tokenSetter := &models.RefreshTokenSetter{
-		UserID:     omit.From(token.UserID),
-		Token:      omit.From(newRefreshToken),
-		DeviceName: omitnull.From(deviceName),
-		DeviceID:   omitnull.From(token.DeviceID.GetOrZero()),
-		IPAddress:  omitnull.From(ipAddress),
-		UserAgent:  omitnull.From(userAgent),
-		ExpiresAt:  omit.From(refreshExpiresAt),
-	}
-
-	_, err = service.tokenRepository.Create(ctx, tokenSetter)
+	_, err = service.tokenRepository.Create(ctx, refreshTokenRepo.CreateRefreshTokenParams{
+		UserID:     token.UserID,
+		Token:      newRefreshToken,
+		DeviceName: deviceName,
+		DeviceID:   token.DeviceID,
+		IPAddress:  ipAddress,
+		UserAgent:  userAgent,
+		ExpiresAt:  refreshExpiresAt,
+	})
 	if err != nil {
 		log.Errorf("failed to create new refresh token: %s", err)
 		return nil, exceptions.NewBusinessLogicError(exceptions.DataCreateFailed, errors.New("failed to create new refresh token"), nil)
@@ -291,7 +276,7 @@ func (service *AuthServiceImpl) Logout(ctx context.Context, refreshToken string)
 	// Find the token
 	token, err := service.tokenRepository.FindByToken(ctx, refreshToken)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, domain.ErrNotFound) {
 			return exceptions.NewAuthenticationError("Invalid refresh token", exceptions.AuthenticationInvalidToken)
 		}
 		log.Errorf("failed to find refresh token: %s", err)
@@ -299,7 +284,7 @@ func (service *AuthServiceImpl) Logout(ctx context.Context, refreshToken string)
 	}
 
 	// Check if already revoked
-	if token.RevokedAt.IsValue() {
+	if token.IsRevoked() {
 		return exceptions.NewAuthenticationError("Refresh token has already been revoked", exceptions.AuthenticationTokenRevoked)
 	}
 
@@ -329,25 +314,19 @@ func (service *AuthServiceImpl) GetMe(ctx context.Context, userID int64) (*dto.G
 	// Find user by ID
 	user, err := service.userRepository.FindByID(ctx, userID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, domain.ErrNotFound) {
 			return nil, exceptions.NewBusinessLogicError(exceptions.DataNotFound, errors.New("user not found"), nil)
 		}
 		log.Errorf("failed to find user by ID: %s", err)
 		return nil, exceptions.NewBusinessLogicError(exceptions.DataGetFailed, errors.New("failed to get user"), nil)
 	}
 
-	// Build user response
-	email := ""
-	if user.Email.IsValue() {
-		email = user.Email.GetOrZero()
-	}
-
 	userResp := &dto.UserResponse{
 		ID:         user.ID,
-		Email:      email,
-		FullName:   user.Name.GetOrZero(),
-		Phone:      user.Phone.GetOrZero(),
-		IsVerified: user.IsVerified.GetOrZero(),
+		Email:      user.Email,
+		FullName:   user.Name,
+		Phone:      user.Phone,
+		IsVerified: user.IsVerified,
 	}
 
 	return &dto.GetMeResponse{
@@ -380,15 +359,15 @@ func (service *AuthServiceImpl) GetSessions(ctx context.Context, userID int64) (
 	sessions := make([]*dto.ActiveSessionResponse, 0, len(tokens))
 	for _, t := range tokens {
 		session := &dto.ActiveSessionResponse{
-			ID:        t.ID,
-			DeviceName: t.DeviceName.GetOrZero(),
-			DeviceID:   t.DeviceID.GetOrZero(),
-			IPAddress:  t.IPAddress.GetOrZero(),
-			UserAgent:  t.UserAgent.GetOrZero(),
+			ID:         t.ID,
+			DeviceName: t.DeviceName,
+			DeviceID:   t.DeviceID,
+			IPAddress:  t.IPAddress,
+			UserAgent:  t.UserAgent,
 		}
-		if t.CreatedAt.IsValue() {
-			session.CreatedAt = t.CreatedAt.GetOrZero().UTC().Format(time.RFC3339)
-			session.LastUsed = t.CreatedAt.GetOrZero().UTC().Format(time.RFC3339)
+		if !t.CreatedAt.IsZero() {
+			session.CreatedAt = t.CreatedAt.UTC().Format(time.RFC3339)
+			session.LastUsed = t.CreatedAt.UTC().Format(time.RFC3339)
 		}
 		sessions = append(sessions, session)
 	}
@@ -398,9 +377,7 @@ func (service *AuthServiceImpl) GetSessions(ctx context.Context, userID int64) (
 
 // UpdateProfile updates the user's full name and/or phone number
 func (service *AuthServiceImpl) UpdateProfile(ctx context.Context, userID int64, req *dto.UpdateProfileRequest) (*dto.UserResponse, error) {
-	setter := &models.UserSetter{
-		UpdatedBy: omit.From(userID),
-	}
+	params := userRepo.UpdateProfileParams{UpdatedBy: userID}
 
 	if req.Phone != "" {
 		cleanedPhone, err := utils.NormalizePhoneNumber(req.Phone)
@@ -408,24 +385,27 @@ func (service *AuthServiceImpl) UpdateProfile(ctx context.Context, userID int64,
 			return nil, err
 		}
 		existingUser, err := service.userRepository.FindByPhone(ctx, cleanedPhone)
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		if err != nil && !errors.Is(err, domain.ErrNotFound) {
 			log.Errorf("failed to check phone duplication for user %d: %s", userID, err)
 			return nil, exceptions.NewBusinessLogicError(exceptions.DataGetFailed, errors.New("failed to update profile"), nil)
 		}
 		if existingUser != nil && existingUser.ID != userID {
 			return nil, exceptions.NewBusinessLogicError(exceptions.DataConflict, errors.New("phone already in use"), nil)
 		}
-		setter.Phone = omitnull.From(cleanedPhone)
+		params.Phone = &cleanedPhone
 	}
 
 	if req.FullName != "" {
-		setter.Name = omitnull.From(req.FullName)
+		params.Name = &req.FullName
 	}
 
-	user, err := service.userRepository.UpdateByID(ctx, userID, setter)
+	user, err := service.userRepository.UpdateProfile(ctx, userID, params)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, domain.ErrNotFound) {
 			return nil, exceptions.NewBusinessLogicError(exceptions.DataNotFound, errors.New("user not found"), nil)
+		}
+		if errors.Is(err, domain.ErrPhoneTaken) {
+			return nil, exceptions.NewBusinessLogicError(exceptions.DataConflict, errors.New("phone already in use"), nil)
 		}
 		log.Errorf("failed to update profile for user %d: %s", userID, err)
 		return nil, exceptions.NewBusinessLogicError(exceptions.DataUpdateFailed, errors.New("failed to update profile"), nil)
@@ -433,10 +413,10 @@ func (service *AuthServiceImpl) UpdateProfile(ctx context.Context, userID int64,
 
 	return &dto.UserResponse{
 		ID:         user.ID,
-		Email:      user.Email.GetOrZero(),
-		FullName:   user.Name.GetOrZero(),
-		Phone:      user.Phone.GetOrZero(),
-		IsVerified: user.IsVerified.GetOrZero(),
+		Email:      user.Email,
+		FullName:   user.Name,
+		Phone:      user.Phone,
+		IsVerified: user.IsVerified,
 	}, nil
 }
 
@@ -444,7 +424,7 @@ func (service *AuthServiceImpl) UpdateProfile(ctx context.Context, userID int64,
 func (service *AuthServiceImpl) UpdatePassword(ctx context.Context, userID int64, req *dto.UpdatePasswordRequest) error {
 	user, err := service.userRepository.FindByID(ctx, userID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, domain.ErrNotFound) {
 			return exceptions.NewBusinessLogicError(exceptions.DataNotFound, errors.New("user not found"), nil)
 		}
 		log.Errorf("failed to find user %d: %s", userID, err)
@@ -461,10 +441,7 @@ func (service *AuthServiceImpl) UpdatePassword(ctx context.Context, userID int64
 		return exceptions.NewBusinessLogicError(exceptions.DataUpdateFailed, errors.New("failed to update password"), nil)
 	}
 
-	_, err = service.userRepository.UpdateByID(ctx, userID, &models.UserSetter{
-		Password:  omit.From(hashedPassword),
-		UpdatedBy: omit.From(userID),
-	})
+	err = service.userRepository.UpdatePassword(ctx, userID, hashedPassword)
 	if err != nil {
 		log.Errorf("failed to update password for user %d: %s", userID, err)
 		return exceptions.NewBusinessLogicError(exceptions.DataUpdateFailed, errors.New("failed to update password"), nil)
@@ -477,7 +454,7 @@ func (service *AuthServiceImpl) UpdatePassword(ctx context.Context, userID int64
 func (service *AuthServiceImpl) RevokeSession(ctx context.Context, userID int64, sessionID int64) error {
 	err := service.tokenRepository.RevokeByIDForUser(ctx, sessionID, userID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, domain.ErrNotFound) {
 			return exceptions.NewBusinessLogicError(exceptions.DataNotFound, errors.New("session not found"), nil)
 		}
 		log.Errorf("failed to revoke session %d for user %d: %s", sessionID, userID, err)
@@ -491,7 +468,7 @@ func (service *AuthServiceImpl) RevokeSession(ctx context.Context, userID int64,
 func (service *AuthServiceImpl) ForgotPassword(ctx context.Context, email string) error {
 	user, err := service.userRepository.FindByEmail(ctx, email)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, domain.ErrNotFound) {
 			// Don't reveal whether the email exists
 			return nil
 		}
@@ -513,11 +490,11 @@ func (service *AuthServiceImpl) ForgotPassword(ctx context.Context, email string
 
 	expiresAt := time.Now().UTC().Add(otpExpire)
 
-	err = service.trxService.WithTx(ctx, func(tx bob.Executor) error {
-		if err := service.otpRepository.InvalidatePreviousByUserIDAndPurposeWithExec(ctx, tx, user.ID, otpRepo.OTPPurposePasswordReset); err != nil {
+	err = service.trxService.WithTx(ctx, func(txCtx context.Context) error {
+		if err := service.otpRepository.InvalidatePreviousByUserIDAndPurpose(txCtx, user.ID, otpRepo.OTPPurposePasswordReset); err != nil {
 			return err
 		}
-		_, err := service.otpRepository.CreateWithExec(ctx, tx, otpRepo.CreateOTPParams{
+		_, err := service.otpRepository.Create(txCtx, otpRepo.CreateOTPParams{
 			UserID:    user.ID,
 			Code:      otp,
 			Purpose:   otpRepo.OTPPurposePasswordReset,
@@ -530,7 +507,7 @@ func (service *AuthServiceImpl) ForgotPassword(ctx context.Context, email string
 		return exceptions.NewBusinessLogicError(exceptions.DataCreateFailed, errors.New("failed to process request"), nil)
 	}
 
-	name := user.Name.GetOrZero()
+	name := user.Name
 	if name == "" {
 		name = email
 	}
@@ -560,7 +537,7 @@ func (service *AuthServiceImpl) ForgotPassword(ctx context.Context, email string
 func (service *AuthServiceImpl) ResetPassword(ctx context.Context, req *dto.ResetPasswordRequest) error {
 	user, err := service.userRepository.FindByEmail(ctx, req.Email)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, domain.ErrNotFound) {
 			return exceptions.NewBusinessLogicError(exceptions.DataNotFound, errors.New("invalid email or OTP"), nil)
 		}
 		log.Errorf("failed to find user by email for reset password: %s", err)
@@ -569,7 +546,7 @@ func (service *AuthServiceImpl) ResetPassword(ctx context.Context, req *dto.Rese
 
 	otpRecord, err := service.otpRepository.FindValidByUserAndCode(ctx, user.ID, otpRepo.OTPPurposePasswordReset, req.OTP)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, domain.ErrNotFound) {
 			return exceptions.NewBusinessLogicError(exceptions.InvalidArgument, errors.New("invalid or expired OTP"), nil)
 		}
 		log.Errorf("failed to find OTP for user %d: %s", user.ID, err)
@@ -582,11 +559,11 @@ func (service *AuthServiceImpl) ResetPassword(ctx context.Context, req *dto.Rese
 		return exceptions.NewBusinessLogicError(exceptions.DataUpdateFailed, errors.New("failed to reset password"), nil)
 	}
 
-	err = service.trxService.WithTx(ctx, func(tx bob.Executor) error {
-		if err := service.otpRepository.MarkUsedWithExec(ctx, tx, otpRecord.ID); err != nil {
+	err = service.trxService.WithTx(ctx, func(txCtx context.Context) error {
+		if err := service.otpRepository.MarkUsed(txCtx, otpRecord.ID); err != nil {
 			return err
 		}
-		return service.userRepository.UpdatePasswordWithExec(ctx, tx, user.ID, hashedPassword)
+		return service.userRepository.UpdatePassword(txCtx, user.ID, hashedPassword)
 	})
 	if err != nil {
 		log.Errorf("failed to reset password for user %d: %s", user.ID, err)
@@ -601,18 +578,18 @@ func (service *AuthServiceImpl) ResetPassword(ctx context.Context, req *dto.Rese
 func (service *AuthServiceImpl) SendVerificationEmail(ctx context.Context, userID int64) error {
 	user, err := service.userRepository.FindByID(ctx, userID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, domain.ErrNotFound) {
 			return exceptions.NewBusinessLogicError(exceptions.DataNotFound, errors.New("user not found"), nil)
 		}
 		log.Errorf("failed to find user %d for verification email: %s", userID, err)
 		return exceptions.NewBusinessLogicError(exceptions.DataGetFailed, errors.New("failed to process request"), nil)
 	}
 
-	if !user.Email.IsValue() || user.Email.GetOrZero() == "" {
+	if user.Email == "" {
 		return exceptions.NewBusinessLogicError(exceptions.InvalidArgument, errors.New("user has no email address"), nil)
 	}
 
-	if user.IsVerified.GetOrZero() {
+	if user.IsVerified {
 		return exceptions.NewBusinessLogicError(exceptions.InvalidArgument, errors.New("email is already verified"), nil)
 	}
 
@@ -630,11 +607,11 @@ func (service *AuthServiceImpl) SendVerificationEmail(ctx context.Context, userI
 
 	expiresAt := time.Now().UTC().Add(otpExpire)
 
-	err = service.trxService.WithTx(ctx, func(tx bob.Executor) error {
-		if err := service.otpRepository.InvalidatePreviousByUserIDAndPurposeWithExec(ctx, tx, userID, otpRepo.OTPPurposeEmailVerification); err != nil {
+	err = service.trxService.WithTx(ctx, func(txCtx context.Context) error {
+		if err := service.otpRepository.InvalidatePreviousByUserIDAndPurpose(txCtx, userID, otpRepo.OTPPurposeEmailVerification); err != nil {
 			return err
 		}
-		_, err := service.otpRepository.CreateWithExec(ctx, tx, otpRepo.CreateOTPParams{
+		_, err := service.otpRepository.Create(txCtx, otpRepo.CreateOTPParams{
 			UserID:    userID,
 			Code:      otp,
 			Purpose:   otpRepo.OTPPurposeEmailVerification,
@@ -647,8 +624,8 @@ func (service *AuthServiceImpl) SendVerificationEmail(ctx context.Context, userI
 		return exceptions.NewBusinessLogicError(exceptions.DataCreateFailed, errors.New("failed to process request"), nil)
 	}
 
-	email := user.Email.GetOrZero()
-	name := user.Name.GetOrZero()
+	email := user.Email
+	name := user.Name
 	if name == "" {
 		name = email
 	}
@@ -678,7 +655,7 @@ func (service *AuthServiceImpl) SendVerificationEmail(ctx context.Context, userI
 func (service *AuthServiceImpl) VerifyEmail(ctx context.Context, userID int64, code string) error {
 	otpRecord, err := service.otpRepository.FindValidByUserAndCode(ctx, userID, otpRepo.OTPPurposeEmailVerification, code)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, domain.ErrNotFound) {
 			return exceptions.NewBusinessLogicError(exceptions.InvalidArgument, errors.New("invalid or expired OTP"), nil)
 		}
 		log.Errorf("failed to find verification OTP for user %d: %s", userID, err)
@@ -687,17 +664,11 @@ func (service *AuthServiceImpl) VerifyEmail(ctx context.Context, userID int64, c
 
 	now := time.Now().UTC()
 
-	err = service.trxService.WithTx(ctx, func(tx bob.Executor) error {
-		if err := service.otpRepository.MarkUsedWithExec(ctx, tx, otpRecord.ID); err != nil {
+	err = service.trxService.WithTx(ctx, func(txCtx context.Context) error {
+		if err := service.otpRepository.MarkUsed(txCtx, otpRecord.ID); err != nil {
 			return err
 		}
-		setter := &models.UserSetter{
-			IsVerified: omitnull.From(true),
-			VerifiedAt: omitnull.From(now),
-			UpdatedBy:  omit.From(userID),
-		}
-		_, err := service.userRepository.UpdateByID(ctx, userID, setter)
-		return err
+		return service.userRepository.MarkEmailVerified(txCtx, userID, now)
 	})
 	if err != nil {
 		log.Errorf("failed to verify email for user %d: %s", userID, err)
