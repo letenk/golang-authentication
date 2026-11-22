@@ -6,8 +6,8 @@ import (
 	"errors"
 
 	"github.com/letenk/golang-authentication/configs/database"
-	"github.com/letenk/golang-authentication/db/sqlcgen"
 	"github.com/letenk/golang-authentication/internal/domain"
+	"github.com/uptrace/bun"
 )
 
 type RefreshTokenRepositoryImpl struct {
@@ -18,108 +18,110 @@ func NewRefreshTokenRepository(db *database.Postgres) *RefreshTokenRepositoryImp
 	return &RefreshTokenRepositoryImpl{db: db}
 }
 
-// queries runs on the transaction carried by ctx, or on the pool.
-func (r *RefreshTokenRepositoryImpl) queries(ctx context.Context) *sqlcgen.Queries {
-	return sqlcgen.New(r.db.Conn(ctx))
-}
-
 func (r *RefreshTokenRepositoryImpl) Create(ctx context.Context, params CreateRefreshTokenParams) (*domain.RefreshToken, error) {
-	token, err := r.queries(ctx).CreateRefreshToken(ctx, sqlcgen.CreateRefreshTokenParams{
+	row := &refreshTokenRow{
 		UserID:     params.UserID,
 		Token:      params.Token,
 		DeviceName: storedAsGiven(params.DeviceName),
 		DeviceID:   storedAsGiven(params.DeviceID),
-		IpAddress:  storedAsGiven(params.IPAddress),
+		IPAddress:  storedAsGiven(params.IPAddress),
 		UserAgent:  storedAsGiven(params.UserAgent),
 		ExpiresAt:  params.ExpiresAt,
-	})
-	if err != nil {
+	}
+	if _, err := r.db.NewInsert(ctx).Model(row).Returning("*").Exec(ctx); err != nil {
 		return nil, err
 	}
-	return toDomainRefreshToken(token), nil
+	return row.toDomain(), nil
 }
 
 func (r *RefreshTokenRepositoryImpl) FindByToken(ctx context.Context, token string) (*domain.RefreshToken, error) {
-	rt, err := r.queries(ctx).GetRefreshTokenByToken(ctx, token)
-	if err != nil {
+	row := new(refreshTokenRow)
+	if err := r.db.NewSelect(ctx).Model(row).Where("token = ?", token).Scan(ctx); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, domain.ErrNotFound
 		}
 		return nil, err
 	}
-	return toDomainRefreshToken(rt), nil
+	return row.toDomain(), nil
+}
+
+// active restricts q to sessions that are neither revoked nor expired.
+func active(q *bun.SelectQuery, userID int64) *bun.SelectQuery {
+	return q.Where("user_id = ?", userID).
+		Where("revoked_at IS NULL").
+		Where("expires_at > CURRENT_TIMESTAMP")
 }
 
 func (r *RefreshTokenRepositoryImpl) FindActiveByUserID(ctx context.Context, userID int64) ([]*domain.RefreshToken, error) {
-	tokens, err := r.queries(ctx).ListActiveRefreshTokensByUserID(ctx, userID)
-	if err != nil {
+	var rows []refreshTokenRow
+	if err := active(r.db.NewSelect(ctx).Model(&rows), userID).Order("created_at DESC").Scan(ctx); err != nil {
 		return nil, err
 	}
 
-	result := make([]*domain.RefreshToken, 0, len(tokens))
-	for _, t := range tokens {
-		result = append(result, toDomainRefreshToken(t))
+	// Non-nil so an empty list serialises as [] rather than null.
+	result := make([]*domain.RefreshToken, 0, len(rows))
+	for i := range rows {
+		result = append(result, rows[i].toDomain())
 	}
 	return result, nil
 }
 
 func (r *RefreshTokenRepositoryImpl) CountActiveByUserID(ctx context.Context, userID int64) (int, error) {
-	n, err := r.queries(ctx).CountActiveRefreshTokensByUserID(ctx, userID)
+	n, err := active(r.db.NewSelect(ctx).Model((*refreshTokenRow)(nil)), userID).Count(ctx)
 	return int(n), err
 }
 
+// Revoke is deliberately not limited to unrevoked tokens: revoking twice
+// succeeds and refreshes revoked_at, as it always has.
 func (r *RefreshTokenRepositoryImpl) Revoke(ctx context.Context, token string) error {
-	return requireRow(r.queries(ctx).RevokeRefreshToken(ctx, token))
+	return requireRow(r.revoke(ctx).Where("token = ?", token).Exec(ctx))
 }
 
+// ReplaceToken only rotates an unrevoked token; 0 rows means a concurrent
+// request already rotated or revoked it.
 func (r *RefreshTokenRepositoryImpl) ReplaceToken(ctx context.Context, oldToken, newToken string) error {
-	return requireRow(r.queries(ctx).ReplaceRefreshToken(ctx, sqlcgen.ReplaceRefreshTokenParams{
-		Token:           oldToken,
-		ReplacedByToken: sql.NullString{String: newToken, Valid: true},
-	}))
+	return requireRow(r.revoke(ctx).
+		Set("replaced_by_token = ?", newToken).
+		Where("token = ?", oldToken).
+		Where("revoked_at IS NULL").
+		Exec(ctx))
 }
 
 func (r *RefreshTokenRepositoryImpl) RevokeByIDForUser(ctx context.Context, sessionID int64, userID int64) error {
-	return requireRow(r.queries(ctx).RevokeRefreshTokenByIDForUser(ctx, sqlcgen.RevokeRefreshTokenByIDForUserParams{
-		ID:     sessionID,
-		UserID: userID,
-	}))
+	return requireRow(r.revoke(ctx).
+		Where("id = ?", sessionID).
+		Where("user_id = ?", userID).
+		Where("revoked_at IS NULL").
+		Exec(ctx))
 }
 
 func (r *RefreshTokenRepositoryImpl) RevokeAllByUserID(ctx context.Context, userID int64) (int, error) {
-	n, err := r.queries(ctx).RevokeAllRefreshTokensByUserID(ctx, userID)
+	res, err := r.revoke(ctx).
+		Where("user_id = ?", userID).
+		Where("revoked_at IS NULL").
+		Exec(ctx)
+	if err != nil {
+		return 0, err
+	}
+	n, err := res.RowsAffected()
 	return int(n), err
 }
 
+func (r *RefreshTokenRepositoryImpl) revoke(ctx context.Context) *bun.UpdateQuery {
+	return r.db.NewUpdate(ctx).Table("refresh_tokens").Set("revoked_at = CURRENT_TIMESTAMP")
+}
+
 // requireRow turns "no row affected" into domain.ErrNotFound.
-func requireRow(affected int64, err error) error {
+func requireRow(res sql.Result, err error) error {
 	if err != nil {
 		return err
 	}
-	if affected == 0 {
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
 		return domain.ErrNotFound
 	}
 	return nil
-}
-
-// storedAsGiven keeps "" as an empty string (not NULL), matching how device
-// fields have always been written.
-func storedAsGiven(s string) sql.NullString {
-	return sql.NullString{String: s, Valid: true}
-}
-
-func toDomainRefreshToken(t sqlcgen.RefreshToken) *domain.RefreshToken {
-	return &domain.RefreshToken{
-		ID:              t.ID,
-		UserID:          t.UserID,
-		Token:           t.Token,
-		DeviceName:      t.DeviceName.String,
-		DeviceID:        t.DeviceID.String,
-		IPAddress:       t.IpAddress.String,
-		UserAgent:       t.UserAgent.String,
-		ExpiresAt:       t.ExpiresAt,
-		CreatedAt:       t.CreatedAt.Time,
-		RevokedAt:       database.TimePtr(t.RevokedAt),
-		ReplacedByToken: t.ReplacedByToken.String,
-	}
 }
