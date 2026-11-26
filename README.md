@@ -175,7 +175,7 @@ The spec is generated from comments on the handlers. After changing an endpoint 
 | `POST` | `/auth/register` | — | Register new user |
 | `POST` | `/auth/login` | — | Login (email or phone) · rate limited |
 | `POST` | `/auth/refresh` | — | Refresh access token · rate limited |
-| `POST` | `/auth/logout` | ✓ | Logout current session |
+| `POST` | `/auth/logout` | — | Logout current session · needs the refresh token (body or `refresh_token` cookie), not an access token |
 | `POST` | `/auth/logout-all` | ✓ | Logout all devices |
 | `GET` | `/auth/me` | ✓ | Get current user |
 | `DELETE` | `/auth/me` | ✓ | Delete account |

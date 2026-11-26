@@ -20,9 +20,9 @@ const (
 func InitCredentialEnv() error {
 	var credentialConfigPath string
 	flag.StringVar(
-		&credentialConfigPath, 
-		"credentials-path", 
-		pathCredentialNameDefault, 
+		&credentialConfigPath,
+		"credentials-path",
+		pathCredentialNameDefault,
 		"credential config path",
 	)
 	flag.Parse()
@@ -59,8 +59,8 @@ func InitCredentialEnv() error {
 	}
 
 	if err := credential.Unmarshal(Config); err != nil {
-        return fmt.Errorf("failed to unmarshal config: %w", err)
-    }
+		return fmt.Errorf("failed to unmarshal config: %w", err)
+	}
 
 	// Validate required configs
 	if err := Config.Validate(); err != nil {

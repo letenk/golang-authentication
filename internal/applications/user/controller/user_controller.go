@@ -29,7 +29,6 @@ func NewUserController(authService service.AuthService) *UserController {
 //	@Security		BearerAuth
 //	@Success		200	{object}	response.body{data=[]dto.ActiveSessionResponse}
 //	@Failure		401	{object}	response.body	"Missing, invalid or expired access token"
-//	@Failure		422	{object}	response.body	"Failed to load sessions"
 //	@Failure		500	{object}	response.body	"Unexpected server error"
 //	@Router			/user/sessions [get]
 func (controller *UserController) GetSessions(ctx echo.Context) error {
@@ -102,6 +101,10 @@ func (controller *UserController) UpdateProfile(ctx echo.Context) error {
 
 	req := &dto.UpdateProfileRequest{}
 	if err := helper.BindAndValidate(ctx, req); err != nil {
+		return err
+	}
+
+	if err := req.Validate(); err != nil {
 		return err
 	}
 

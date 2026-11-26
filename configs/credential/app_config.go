@@ -149,4 +149,3 @@ func (c *AppConfig) Validate() error {
 
 	return nil
 }
-
