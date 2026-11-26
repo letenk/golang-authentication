@@ -20,6 +20,7 @@ definitions:
   dto.ForgotPasswordRequest:
     properties:
       email:
+        example: user@example.com
         type: string
     required:
     - email
@@ -36,17 +37,26 @@ definitions:
   dto.LoginRequest:
     properties:
       device_id:
+        description: Optional. Client-generated identifier of the device.
+        example: a1b2c3d4
         maxLength: 255
         type: string
       device_name:
+        description: Optional. Label shown in GET /user/sessions; defaults to "Unknown
+          Device".
+        example: iPhone 15
         maxLength: 100
         type: string
       email:
+        description: Email or phone is required. If both are sent, email is used.
+        example: user@example.com
         type: string
       password:
+        example: Str0ng!Pass
         type: string
       phone:
-        description: 'E.164 format: +628123456789'
+        description: E.164 format. Used only when email is empty.
+        example: "+628123456789"
         type: string
     required:
     - password
@@ -72,6 +82,9 @@ definitions:
   dto.LogoutRequest:
     properties:
       refresh_token:
+        description: Refresh token of the session to end. Leave the body empty to
+          use the refresh_token cookie.
+        example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
         type: string
     required:
     - refresh_token
@@ -84,6 +97,9 @@ definitions:
   dto.RefreshTokenRequest:
     properties:
       refresh_token:
+        description: Refresh token from login or the previous refresh. Leave the body
+          empty to use the refresh_token cookie.
+        example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
         type: string
     required:
     - refresh_token
@@ -102,16 +118,24 @@ definitions:
   dto.RegisterRequest:
     properties:
       email:
+        description: Email or phone is required; both may be set.
+        example: user@example.com
         type: string
       full_name:
+        description: Optional, 3 to 100 characters.
+        example: John Doe
         maxLength: 100
         minLength: 3
         type: string
       password:
+        description: At least 8 characters with a lowercase letter, an uppercase letter,
+          a digit and a symbol.
+        example: Str0ng!Pass
         minLength: 8
         type: string
       phone:
-        description: 'E.164 format: +628123456789'
+        description: E.164 format. Email or phone is required; both may be set.
+        example: "+628123456789"
         type: string
     required:
     - password
@@ -124,11 +148,17 @@ definitions:
   dto.ResetPasswordRequest:
     properties:
       email:
+        example: user@example.com
         type: string
       new_password:
+        description: At least 8 characters with a lowercase letter, an uppercase letter,
+          a digit and a symbol.
+        example: N3w!Passw0rd
         minLength: 8
         type: string
       otp:
+        description: OTP from the password-reset email.
+        example: "12345"
         type: string
     required:
     - email
@@ -138,9 +168,13 @@ definitions:
   dto.UpdatePasswordRequest:
     properties:
       new_password:
+        description: At least 8 characters with a lowercase letter, an uppercase letter,
+          a digit and a symbol.
+        example: N3w!Passw0rd
         minLength: 8
         type: string
       old_password:
+        example: Str0ng!Pass
         type: string
     required:
     - new_password
@@ -149,10 +183,14 @@ definitions:
   dto.UpdateProfileRequest:
     properties:
       full_name:
+        description: Optional, 3 to 100 characters. Send full_name, phone, or both.
+        example: John Doe
         maxLength: 100
         minLength: 3
         type: string
       phone:
+        description: Optional, E.164 format. Send full_name, phone, or both.
+        example: "+628123456789"
         type: string
     type: object
   dto.UserResponse:
@@ -173,6 +211,8 @@ definitions:
   dto.VerifyEmailRequest:
     properties:
       otp:
+        description: OTP from the verification email.
+        example: "12345"
         type: string
     required:
     - otp
