@@ -203,7 +203,6 @@ func (controller *AuthController) Logout(ctx echo.Context) error {
 //	@Security		BearerAuth
 //	@Success		200	{object}	response.body{data=dto.LogoutAllResponse}
 //	@Failure		401	{object}	response.body	"Missing, invalid or expired access token"
-//	@Failure		422	{object}	response.body	"Failed to revoke sessions"
 //	@Failure		500	{object}	response.body	"Unexpected server error"
 //	@Router			/auth/logout-all [post]
 func (controller *AuthController) LogoutAll(ctx echo.Context) error {
@@ -260,7 +259,6 @@ func (controller *AuthController) GetMe(ctx echo.Context) error {
 //	@Security		BearerAuth
 //	@Success		200	{object}	response.body
 //	@Failure		401	{object}	response.body	"Missing, invalid or expired access token"
-//	@Failure		422	{object}	response.body	"Failed to delete the account"
 //	@Failure		500	{object}	response.body	"Unexpected server error"
 //	@Router			/auth/me [delete]
 func (controller *AuthController) DeleteMe(ctx echo.Context) error {

@@ -29,7 +29,6 @@ func NewUserController(authService service.AuthService) *UserController {
 //	@Security		BearerAuth
 //	@Success		200	{object}	response.body{data=[]dto.ActiveSessionResponse}
 //	@Failure		401	{object}	response.body	"Missing, invalid or expired access token"
-//	@Failure		422	{object}	response.body	"Failed to load sessions"
 //	@Failure		500	{object}	response.body	"Unexpected server error"
 //	@Router			/user/sessions [get]
 func (controller *UserController) GetSessions(ctx echo.Context) error {
