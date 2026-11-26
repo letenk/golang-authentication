@@ -963,7 +963,8 @@ const docTemplate = `{
             ],
             "properties": {
                 "email": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "user@example.com"
                 }
             }
         },
@@ -988,22 +989,30 @@ const docTemplate = `{
             ],
             "properties": {
                 "device_id": {
+                    "description": "Optional. Client-generated identifier of the device.",
                     "type": "string",
-                    "maxLength": 255
+                    "maxLength": 255,
+                    "example": "a1b2c3d4"
                 },
                 "device_name": {
+                    "description": "Optional. Label shown in GET /user/sessions; defaults to \"Unknown Device\".",
                     "type": "string",
-                    "maxLength": 100
+                    "maxLength": 100,
+                    "example": "iPhone 15"
                 },
                 "email": {
-                    "type": "string"
+                    "description": "Email or phone is required. If both are sent, email is used.",
+                    "type": "string",
+                    "example": "user@example.com"
                 },
                 "password": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "Str0ng!Pass"
                 },
                 "phone": {
-                    "description": "E.164 format: +628123456789",
-                    "type": "string"
+                    "description": "E.164 format. Used only when email is empty.",
+                    "type": "string",
+                    "example": "+628123456789"
                 }
             }
         },
@@ -1042,7 +1051,9 @@ const docTemplate = `{
             ],
             "properties": {
                 "refresh_token": {
-                    "type": "string"
+                    "description": "Refresh token of the session to end. Leave the body empty to use the refresh_token cookie.",
+                    "type": "string",
+                    "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
                 }
             }
         },
@@ -1061,7 +1072,9 @@ const docTemplate = `{
             ],
             "properties": {
                 "refresh_token": {
-                    "type": "string"
+                    "description": "Refresh token from login or the previous refresh. Leave the body empty to use the refresh_token cookie.",
+                    "type": "string",
+                    "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
                 }
             }
         },
@@ -1089,20 +1102,27 @@ const docTemplate = `{
             ],
             "properties": {
                 "email": {
-                    "type": "string"
+                    "description": "Email or phone is required; both may be set.",
+                    "type": "string",
+                    "example": "user@example.com"
                 },
                 "full_name": {
+                    "description": "Optional, 3 to 100 characters.",
                     "type": "string",
                     "maxLength": 100,
-                    "minLength": 3
+                    "minLength": 3,
+                    "example": "John Doe"
                 },
                 "password": {
+                    "description": "At least 8 characters with a lowercase letter, an uppercase letter, a digit and a symbol.",
                     "type": "string",
-                    "minLength": 8
+                    "minLength": 8,
+                    "example": "Str0ng!Pass"
                 },
                 "phone": {
-                    "description": "E.164 format: +628123456789",
-                    "type": "string"
+                    "description": "E.164 format. Email or phone is required; both may be set.",
+                    "type": "string",
+                    "example": "+628123456789"
                 }
             }
         },
@@ -1123,14 +1143,19 @@ const docTemplate = `{
             ],
             "properties": {
                 "email": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "user@example.com"
                 },
                 "new_password": {
+                    "description": "At least 8 characters with a lowercase letter, an uppercase letter, a digit and a symbol.",
                     "type": "string",
-                    "minLength": 8
+                    "minLength": 8,
+                    "example": "N3w!Passw0rd"
                 },
                 "otp": {
-                    "type": "string"
+                    "description": "OTP from the password-reset email.",
+                    "type": "string",
+                    "example": "12345"
                 }
             }
         },
@@ -1142,11 +1167,14 @@ const docTemplate = `{
             ],
             "properties": {
                 "new_password": {
+                    "description": "At least 8 characters with a lowercase letter, an uppercase letter, a digit and a symbol.",
                     "type": "string",
-                    "minLength": 8
+                    "minLength": 8,
+                    "example": "N3w!Passw0rd"
                 },
                 "old_password": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "Str0ng!Pass"
                 }
             }
         },
@@ -1154,12 +1182,16 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "full_name": {
+                    "description": "Optional, 3 to 100 characters. Send full_name, phone, or both.",
                     "type": "string",
                     "maxLength": 100,
-                    "minLength": 3
+                    "minLength": 3,
+                    "example": "John Doe"
                 },
                 "phone": {
-                    "type": "string"
+                    "description": "Optional, E.164 format. Send full_name, phone, or both.",
+                    "type": "string",
+                    "example": "+628123456789"
                 }
             }
         },
@@ -1193,7 +1225,9 @@ const docTemplate = `{
             ],
             "properties": {
                 "otp": {
-                    "type": "string"
+                    "description": "OTP from the verification email.",
+                    "type": "string",
+                    "example": "12345"
                 }
             }
         },
