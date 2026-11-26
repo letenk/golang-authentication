@@ -1,4 +1,200 @@
 basePath: /api/v1
+definitions:
+  dto.ActiveSessionResponse:
+    properties:
+      created_at:
+        type: string
+      device_id:
+        type: string
+      device_name:
+        type: string
+      id:
+        type: integer
+      ip_address:
+        type: string
+      last_used:
+        type: string
+      user_agent:
+        type: string
+    type: object
+  dto.ForgotPasswordRequest:
+    properties:
+      email:
+        type: string
+    required:
+    - email
+    type: object
+  dto.GetMeResponse:
+    properties:
+      active_sessions:
+        items:
+          $ref: '#/definitions/dto.ActiveSessionResponse'
+        type: array
+      user:
+        $ref: '#/definitions/dto.UserResponse'
+    type: object
+  dto.LoginRequest:
+    properties:
+      device_id:
+        maxLength: 255
+        type: string
+      device_name:
+        maxLength: 100
+        type: string
+      email:
+        type: string
+      password:
+        type: string
+      phone:
+        description: 'E.164 format: +628123456789'
+        type: string
+    required:
+    - password
+    type: object
+  dto.LoginResponse:
+    properties:
+      access_token:
+        type: string
+      access_token_expires_at:
+        type: string
+      refresh_token:
+        type: string
+      refresh_token_expires_at:
+        type: string
+    type: object
+  dto.LogoutAllResponse:
+    properties:
+      message:
+        type: string
+      revoked_sessions_count:
+        type: integer
+    type: object
+  dto.LogoutRequest:
+    properties:
+      refresh_token:
+        type: string
+    required:
+    - refresh_token
+    type: object
+  dto.LogoutResponse:
+    properties:
+      message:
+        type: string
+    type: object
+  dto.RefreshTokenRequest:
+    properties:
+      refresh_token:
+        type: string
+    required:
+    - refresh_token
+    type: object
+  dto.RefreshTokenResponse:
+    properties:
+      access_token:
+        type: string
+      access_token_expires_at:
+        type: string
+      refresh_token:
+        type: string
+      refresh_token_expires_at:
+        type: string
+    type: object
+  dto.RegisterRequest:
+    properties:
+      email:
+        type: string
+      full_name:
+        maxLength: 100
+        minLength: 3
+        type: string
+      password:
+        minLength: 8
+        type: string
+      phone:
+        description: 'E.164 format: +628123456789'
+        type: string
+    required:
+    - password
+    type: object
+  dto.RegisterResponse:
+    properties:
+      user:
+        $ref: '#/definitions/dto.UserResponse'
+    type: object
+  dto.ResetPasswordRequest:
+    properties:
+      email:
+        type: string
+      new_password:
+        minLength: 8
+        type: string
+      otp:
+        type: string
+    required:
+    - email
+    - new_password
+    - otp
+    type: object
+  dto.UpdatePasswordRequest:
+    properties:
+      new_password:
+        minLength: 8
+        type: string
+      old_password:
+        type: string
+    required:
+    - new_password
+    - old_password
+    type: object
+  dto.UpdateProfileRequest:
+    properties:
+      full_name:
+        maxLength: 100
+        minLength: 3
+        type: string
+      phone:
+        type: string
+    type: object
+  dto.UserResponse:
+    properties:
+      email:
+        type: string
+      full_name:
+        type: string
+      id:
+        type: integer
+      is_active:
+        type: boolean
+      is_verified:
+        type: boolean
+      phone:
+        type: string
+    type: object
+  dto.VerifyEmailRequest:
+    properties:
+      otp:
+        type: string
+    required:
+    - otp
+    type: object
+  response.body:
+    properties:
+      code:
+        type: integer
+      data: {}
+      error:
+        type: string
+      errors:
+        additionalProperties:
+          items:
+            type: string
+          type: array
+        type: object
+      message:
+        type: string
+      serverTime:
+        type: string
+    type: object
 info:
   contact: {}
   description: |-
@@ -7,6 +203,396 @@ info:
   title: Go Auth System API
   version: "1.0"
 paths:
+  /auth/forgot-password:
+    post:
+      consumes:
+      - application/json
+      description: Always answers 200 for a well-formed email, whether or not it is
+        registered, so the endpoint cannot be used to discover accounts. If the email
+        is registered, an OTP is sent to it.
+      parameters:
+      - description: Account email
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ForgotPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.body'
+        "400":
+          description: Validation failed; details in errors
+          schema:
+            $ref: '#/definitions/response.body'
+        "500":
+          description: Unexpected server error
+          schema:
+            $ref: '#/definitions/response.body'
+      summary: Request a password-reset OTP
+      tags:
+      - auth
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Log in with email or phone plus password. Returns the tokens in
+        the body and also sets the access_token and refresh_token HttpOnly cookies.
+        Rate limited to 5 requests per minute per IP.
+      parameters:
+      - description: Credentials and optional device info
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.LoginResponse'
+              type: object
+        "400":
+          description: Validation failed; details in errors
+          schema:
+            $ref: '#/definitions/response.body'
+        "401":
+          description: Invalid credentials
+          schema:
+            $ref: '#/definitions/response.body'
+        "429":
+          description: Rate limit exceeded
+          schema:
+            $ref: '#/definitions/response.body'
+        "500":
+          description: Unexpected server error
+          schema:
+            $ref: '#/definitions/response.body'
+      summary: Log in
+      tags:
+      - auth
+  /auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: 'Revokes the given refresh token and clears the auth cookies. No
+        access token is needed: the refresh token is read from the body, or from the
+        refresh_token cookie when the body is empty.'
+      parameters:
+      - description: Optional when the refresh_token cookie is sent
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/dto.LogoutRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.LogoutResponse'
+              type: object
+        "401":
+          description: Refresh token missing, invalid or already revoked
+          schema:
+            $ref: '#/definitions/response.body'
+        "500":
+          description: Unexpected server error
+          schema:
+            $ref: '#/definitions/response.body'
+      summary: Log out the current session
+      tags:
+      - auth
+  /auth/logout-all:
+    post:
+      description: Revokes all refresh tokens of the current user and clears the auth
+        cookies.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.LogoutAllResponse'
+              type: object
+        "401":
+          description: Missing, invalid or expired access token
+          schema:
+            $ref: '#/definitions/response.body'
+        "422":
+          description: Failed to revoke sessions
+          schema:
+            $ref: '#/definitions/response.body'
+        "500":
+          description: Unexpected server error
+          schema:
+            $ref: '#/definitions/response.body'
+      security:
+      - BearerAuth: []
+      summary: Log out all devices
+      tags:
+      - auth
+  /auth/me:
+    delete:
+      description: Soft-deletes the account of the current user.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.body'
+        "401":
+          description: Missing, invalid or expired access token
+          schema:
+            $ref: '#/definitions/response.body'
+        "422":
+          description: Failed to delete the account
+          schema:
+            $ref: '#/definitions/response.body'
+        "500":
+          description: Unexpected server error
+          schema:
+            $ref: '#/definitions/response.body'
+      security:
+      - BearerAuth: []
+      summary: Delete the current account
+      tags:
+      - auth
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.GetMeResponse'
+              type: object
+        "401":
+          description: Missing, invalid or expired access token
+          schema:
+            $ref: '#/definitions/response.body'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/response.body'
+        "500":
+          description: Unexpected server error
+          schema:
+            $ref: '#/definitions/response.body'
+      security:
+      - BearerAuth: []
+      summary: Get the current user
+      tags:
+      - auth
+  /auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: The refresh token is read from the body, or from the refresh_token
+        cookie when the body is empty. The old refresh token is revoked (rotation)
+        and new cookies are set. Rate limited to 10 requests per minute per IP.
+      parameters:
+      - description: Optional when the refresh_token cookie is sent
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/dto.RefreshTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.RefreshTokenResponse'
+              type: object
+        "401":
+          description: Refresh token missing, invalid, revoked or expired
+          schema:
+            $ref: '#/definitions/response.body'
+        "429":
+          description: Rate limit exceeded
+          schema:
+            $ref: '#/definitions/response.body'
+        "500":
+          description: Unexpected server error
+          schema:
+            $ref: '#/definitions/response.body'
+      summary: Refresh tokens
+      tags:
+      - auth
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Either email or phone (E.164, e.g. +628123456789) is required.
+        The password needs at least 8 characters and must pass the strong-password
+        rule.
+      parameters:
+      - description: Registration data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.RegisterResponse'
+              type: object
+        "400":
+          description: Validation failed; details in errors
+          schema:
+            $ref: '#/definitions/response.body'
+        "422":
+          description: Email or phone already registered
+          schema:
+            $ref: '#/definitions/response.body'
+        "500":
+          description: Unexpected server error
+          schema:
+            $ref: '#/definitions/response.body'
+      summary: Register a new user
+      tags:
+      - auth
+  /auth/resend-verification-email:
+    post:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.body'
+        "401":
+          description: Missing, invalid or expired access token
+          schema:
+            $ref: '#/definitions/response.body'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/response.body'
+        "422":
+          description: No email address, or the email is already verified
+          schema:
+            $ref: '#/definitions/response.body'
+        "500":
+          description: Unexpected server error
+          schema:
+            $ref: '#/definitions/response.body'
+      security:
+      - BearerAuth: []
+      summary: Resend the verification email
+      tags:
+      - auth
+  /auth/reset-password:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Email, OTP and new password
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ResetPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.body'
+        "400":
+          description: Validation failed; details in errors
+          schema:
+            $ref: '#/definitions/response.body'
+        "404":
+          description: Invalid email or OTP
+          schema:
+            $ref: '#/definitions/response.body'
+        "422":
+          description: Invalid or expired OTP
+          schema:
+            $ref: '#/definitions/response.body'
+        "500":
+          description: Unexpected server error
+          schema:
+            $ref: '#/definitions/response.body'
+      summary: Reset the password with an OTP
+      tags:
+      - auth
+  /auth/verify-email:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: OTP from the verification email
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.VerifyEmailRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.body'
+        "400":
+          description: Validation failed; details in errors
+          schema:
+            $ref: '#/definitions/response.body'
+        "401":
+          description: Missing, invalid or expired access token
+          schema:
+            $ref: '#/definitions/response.body'
+        "422":
+          description: Invalid or expired OTP
+          schema:
+            $ref: '#/definitions/response.body'
+        "500":
+          description: Unexpected server error
+          schema:
+            $ref: '#/definitions/response.body'
+      security:
+      - BearerAuth: []
+      summary: Verify the email address
+      tags:
+      - auth
   /health:
     get:
       description: Reports whether the service can reach its database. This endpoint
@@ -29,6 +615,169 @@ paths:
       summary: Health check
       tags:
       - health
+  /user/password:
+    put:
+      consumes:
+      - application/json
+      description: The new password needs at least 8 characters and must pass the
+        strong-password rule.
+      parameters:
+      - description: Old and new password
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdatePasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.body'
+        "400":
+          description: Validation failed; details in errors
+          schema:
+            $ref: '#/definitions/response.body'
+        "401":
+          description: Missing, invalid or expired access token
+          schema:
+            $ref: '#/definitions/response.body'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/response.body'
+        "422":
+          description: Old password is incorrect
+          schema:
+            $ref: '#/definitions/response.body'
+        "500":
+          description: Unexpected server error
+          schema:
+            $ref: '#/definitions/response.body'
+      security:
+      - BearerAuth: []
+      summary: Change the password
+      tags:
+      - user
+  /user/profile:
+    put:
+      consumes:
+      - application/json
+      description: Updates full name and/or phone (E.164, e.g. +628123456789).
+      parameters:
+      - description: Fields to change
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateProfileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.UserResponse'
+              type: object
+        "400":
+          description: Validation failed; details in errors
+          schema:
+            $ref: '#/definitions/response.body'
+        "401":
+          description: Missing, invalid or expired access token
+          schema:
+            $ref: '#/definitions/response.body'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/response.body'
+        "422":
+          description: Phone already in use
+          schema:
+            $ref: '#/definitions/response.body'
+        "500":
+          description: Unexpected server error
+          schema:
+            $ref: '#/definitions/response.body'
+      security:
+      - BearerAuth: []
+      summary: Update the profile
+      tags:
+      - user
+  /user/sessions:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.body'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/dto.ActiveSessionResponse'
+                  type: array
+              type: object
+        "401":
+          description: Missing, invalid or expired access token
+          schema:
+            $ref: '#/definitions/response.body'
+        "422":
+          description: Failed to load sessions
+          schema:
+            $ref: '#/definitions/response.body'
+        "500":
+          description: Unexpected server error
+          schema:
+            $ref: '#/definitions/response.body'
+      security:
+      - BearerAuth: []
+      summary: List active sessions
+      tags:
+      - user
+  /user/sessions/{id}:
+    delete:
+      parameters:
+      - description: Session ID (from GET /user/sessions)
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.body'
+        "400":
+          description: Session ID is not a number
+          schema:
+            $ref: '#/definitions/response.body'
+        "401":
+          description: Missing, invalid or expired access token
+          schema:
+            $ref: '#/definitions/response.body'
+        "404":
+          description: Session not found for this user
+          schema:
+            $ref: '#/definitions/response.body'
+        "500":
+          description: Unexpected server error
+          schema:
+            $ref: '#/definitions/response.body'
+      security:
+      - BearerAuth: []
+      summary: Revoke a session
+      tags:
+      - user
 securityDefinitions:
   BearerAuth:
     description: 'Type "Bearer", a space, then the access token from /auth/login.
