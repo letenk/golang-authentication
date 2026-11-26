@@ -376,10 +376,6 @@ paths:
           description: Missing, invalid or expired access token
           schema:
             $ref: '#/definitions/response.body'
-        "422":
-          description: Failed to revoke sessions
-          schema:
-            $ref: '#/definitions/response.body'
         "500":
           description: Unexpected server error
           schema:
@@ -401,10 +397,6 @@ paths:
             $ref: '#/definitions/response.body'
         "401":
           description: Missing, invalid or expired access token
-          schema:
-            $ref: '#/definitions/response.body'
-        "422":
-          description: Failed to delete the account
           schema:
             $ref: '#/definitions/response.body'
         "500":
@@ -767,10 +759,6 @@ paths:
               type: object
         "401":
           description: Missing, invalid or expired access token
-          schema:
-            $ref: '#/definitions/response.body'
-        "422":
-          description: Failed to load sessions
           schema:
             $ref: '#/definitions/response.body'
         "500":

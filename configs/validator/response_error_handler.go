@@ -35,6 +35,14 @@ func GlobalUnHandleErrors() func(err error, ctx echo.Context) {
 		// Handle other error types (BusinessLogicError, ValidationErrors, etc)
 		errHttpCode, errBusinessCode, msg, errCode, errorMap := MapperErrorCode(err)
 
+		// Server-side failures: log the real error, send only a generic message
+		// so internal details (SQL errors, hostnames, ...) never reach the client.
+		if errHttpCode >= http.StatusInternalServerError {
+			log.Errorf("server error (code %d): %v", errBusinessCode, err)
+			_ = response.Base(ctx, errHttpCode, errBusinessCode, http.StatusText(errHttpCode), nil, nil)
+			return
+		}
+
 		// If error map exists, use structured error response
 		if errorMap != nil {
 			_ = response.ErrorWithMap(ctx, errHttpCode, msg, errorMap)
