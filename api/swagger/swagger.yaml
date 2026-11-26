@@ -1,0 +1,40 @@
+basePath: /api/v1
+info:
+  contact: {}
+  description: |-
+    Authentication boilerplate API: register, login, token refresh, sessions, email verification and password reset.
+    Successful and failed responses share one envelope: {code, message, data, error, errors, serverTime}.
+  title: Go Auth System API
+  version: "1.0"
+paths:
+  /health:
+    get:
+      description: Reports whether the service can reach its database. This endpoint
+        does not use the standard response envelope.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: status, service, env
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: status, error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Health check
+      tags:
+      - health
+securityDefinitions:
+  BearerAuth:
+    description: 'Type "Bearer", a space, then the access token from /auth/login.
+      Note: after calling /auth/login on this page the browser also stores the access_token
+      cookie, which protected endpoints accept when no Authorization header is sent.'
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
