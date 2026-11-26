@@ -228,12 +228,6 @@ const docTemplate = `{
                             "$ref": "#/definitions/response.body"
                         }
                     },
-                    "422": {
-                        "description": "Failed to revoke sessions",
-                        "schema": {
-                            "$ref": "#/definitions/response.body"
-                        }
-                    },
                     "500": {
                         "description": "Unexpected server error",
                         "schema": {
@@ -319,12 +313,6 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Missing, invalid or expired access token",
-                        "schema": {
-                            "$ref": "#/definitions/response.body"
-                        }
-                    },
-                    "422": {
-                        "description": "Failed to delete the account",
                         "schema": {
                             "$ref": "#/definitions/response.body"
                         }
@@ -852,12 +840,6 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Missing, invalid or expired access token",
-                        "schema": {
-                            "$ref": "#/definitions/response.body"
-                        }
-                    },
-                    "422": {
-                        "description": "Failed to load sessions",
                         "schema": {
                             "$ref": "#/definitions/response.body"
                         }
