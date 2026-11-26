@@ -54,10 +54,11 @@ func TestValidate_RejectsUnknownEnvironments(t *testing.T) {
 // wildcard would let any site call the API with the user's cookies.
 func TestValidate_ProductionRequiresExplicitCORSOrigins(t *testing.T) {
 	for name, origins := range map[string]string{
-		"empty":           "",
-		"only spaces":     " , ",
-		"wildcard":        "*",
-		"wildcard inside": "https://app.example.com,*",
+		"empty":            "",
+		"only spaces":      " , ",
+		"wildcard":         "*",
+		"wildcard inside":  "https://app.example.com,*",
+		"wildcard pattern": "https://*",
 	} {
 		t.Run(name, func(t *testing.T) {
 			cfg := validConfig("production")
