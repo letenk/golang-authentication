@@ -70,7 +70,7 @@ func main() {
 		Format: "[${time_rfc3339}] ${status} ${method} ${uri} (${latency_human}) ${error}\n",
 	}))
 	e.Use(middleware.Recover())
-	e.Use(middleware.CORS())
+	e.Use(rest.CORS(cfg.Application.AllowedOrigins()))
 	e.Use(middleware.Secure())
 
 	rest.SetupRouteHandler(e, dbConnection, jwtConfig)
