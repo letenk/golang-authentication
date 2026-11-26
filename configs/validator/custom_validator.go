@@ -10,10 +10,10 @@ type CustomValidator struct {
 
 func NewCustomValidator() *CustomValidator {
 	v := validator.New()
-	
+
 	// Register custom validators
 	v.RegisterValidation("strong_password", IsValidPassword)
-	
+
 	return &CustomValidator{validator: v}
 }
 
