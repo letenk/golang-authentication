@@ -3,7 +3,7 @@ include .env
 export
 
 # Build once, reuse
-.PHONY: run build test test-coverage test-db-up test-db-down test-integration migration-build migration-create migration-up migration-down migration-status
+.PHONY: run build test test-coverage test-db-up test-db-down test-integration swagger migration-build migration-create migration-up migration-down migration-status
 
 # Disposable Postgres used by integration tests (see docker-compose.test.yml)
 TEST_DATABASE_URL ?= postgres://postgres:postgres@localhost:55432/auth_test?sslmode=disable
@@ -33,6 +33,12 @@ test-db-down:
 # Run unit + integration tests against TEST_DATABASE_URL (run `make test-db-up` first)
 test-integration:
 	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" go test -tags=integration -count=1 -p 1 ./...
+
+# Regenerate the Swagger spec into api/swagger from the handler annotations.
+# The swag CLI is pinned here instead of in go.mod; keep it in step with github.com/swaggo/swag in go.mod.
+SWAG_VERSION ?= v1.16.6
+swagger:
+	go run github.com/swaggo/swag/cmd/swag@$(SWAG_VERSION) init -g cmd/main.go -o api/swagger --parseInternal --exclude docs
 
 # Build migration binary (only when needed)
 migration-build:
@@ -86,6 +92,7 @@ help:
 	@echo "  make test-db-up         - Start disposable Postgres for integration tests"
 	@echo "  make test-db-down       - Stop disposable Postgres for integration tests"
 	@echo "  make test-integration   - Run unit + integration tests (needs test-db-up)"
+	@echo "  make swagger            - Regenerate Swagger docs into api/swagger"
 	@echo "  make clean              - Remove built binaries"
 
 .DEFAULT_GOAL := help

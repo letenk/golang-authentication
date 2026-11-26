@@ -123,6 +123,8 @@ The boilerplate originally used [Bob](https://github.com/stephenafamo/bob). It w
 
 ```
 .
+├── api/
+│   └── swagger/                 # Generated Swagger spec (make swagger); do not edit by hand
 ├── cmd/
 │   └── main.go                  # Entry point
 ├── configs/
@@ -157,6 +159,14 @@ The boilerplate originally used [Bob](https://github.com/stephenafamo/bob). It w
 ## API Endpoints
 
 Base path: `/api/v1`
+
+### Interactive docs (Swagger)
+
+With `APPLICATION_ENV` set to `development` or `staging`, open `http://localhost:8080/swagger/index.html` (use your `APPLICATION_PORT`). In `production` the route is not registered and returns `404`.
+
+For protected endpoints, call `POST /auth/login`, click **Authorize** and enter `Bearer <access_token>`. Login also sets the `access_token` cookie in the browser, and the API accepts it when no `Authorization` header is sent, so protected calls from Swagger UI work even before you click **Authorize**. Call `POST /auth/logout` or clear cookies to test the header path alone.
+
+The spec is generated from comments on the handlers. After changing an endpoint or its annotations, run `make swagger` and commit `api/swagger/`.
 
 ### Auth — `/auth`
 
@@ -241,6 +251,9 @@ make test-db-down
 
 # Run tests with coverage report
 make test-coverage
+
+# Regenerate Swagger docs after changing handler annotations
+make swagger
 
 # Create a new migration
 make migration-create name=add_roles_table type=sql

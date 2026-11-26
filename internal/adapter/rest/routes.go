@@ -16,7 +16,7 @@ import (
 
 func SetupRouteHandler(e *echo.Echo, db *database.Postgres, jwtConfig *jwt_config.JWTConfig) {
 
-	// TODO: Implement Swagger
+	RegisterSwagger(e, credential.Config.Application.Env)
 
 	authSvc := authenticationService.NewAuthenticationService(jwtConfig)
 	authMiddleware := authentication.NewAuthenticationMiddleware(authSvc)
@@ -41,6 +41,14 @@ func SetupRouteHandler(e *echo.Echo, db *database.Postgres, jwtConfig *jwt_confi
 }
 
 // healthCheckHandler endpoint for monitoring
+//
+//	@Summary		Health check
+//	@Description	Reports whether the service can reach its database. This endpoint does not use the standard response envelope.
+//	@Tags			health
+//	@Produce		json
+//	@Success		200	{object}	map[string]string	"status, service, env"
+//	@Failure		503	{object}	map[string]string	"status, error"
+//	@Router			/health [get]
 func healthCheckHandler(db *database.Postgres) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		if err := db.HealthCheck(c.Request().Context()); err != nil {
