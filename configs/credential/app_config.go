@@ -18,6 +18,19 @@ type ApplicationConfig struct {
 	Mode string `mapstructure:"mode"`
 	Env  string `mapstructure:"env"`
 	Port string `mapstructure:"port"`
+	// Comma-separated origins allowed to call the API from a browser, with cookies.
+	CORSAllowedOrigins string `mapstructure:"cors_allowed_origins"`
+}
+
+// AllowedOrigins returns CORSAllowedOrigins split on commas, trimmed, without empty entries.
+func (a ApplicationConfig) AllowedOrigins() []string {
+	var origins []string
+	for _, origin := range strings.Split(a.CORSAllowedOrigins, ",") {
+		if origin = strings.TrimSpace(origin); origin != "" {
+			origins = append(origins, origin)
+		}
+	}
+	return origins
 }
 
 type DatabaseConfig struct {
@@ -110,6 +123,16 @@ func (c *AppConfig) Validate() error {
 	if !slices.Contains(validEnvs, c.Application.Env) {
 		return fmt.Errorf("application.env must be one of %s, got %q",
 			strings.Join(validEnvs, ", "), c.Application.Env)
+	}
+
+	// Echo treats an empty list as "*" and "*" inside an origin as a wildcard,
+	// so production must name every origin exactly.
+	if c.Application.Env == "production" {
+		origins := c.Application.AllowedOrigins()
+		if len(origins) == 0 || slices.ContainsFunc(origins, func(o string) bool { return strings.Contains(o, "*") }) {
+			return fmt.Errorf("application.cors_allowed_origins must list exact origins without wildcards in production, got %q",
+				c.Application.CORSAllowedOrigins)
+		}
 	}
 
 	if c.Database.Configs.User == "" {

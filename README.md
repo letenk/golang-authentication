@@ -271,8 +271,9 @@ Copy `.env-example` to `.env` and fill in the values.
 ```env
 # Application
 APPLICATION_NAME=auth-system
-APPLICATION_ENV=development
+APPLICATION_ENV=development             # development | staging | production (anything else stops the app)
 APPLICATION_PORT=8080
+APPLICATION_CORS_ALLOWED_ORIGINS=http://localhost:3000   # comma-separated; required in production, no "*"
 
 # Database
 DB_CONFIGS_HOST=localhost

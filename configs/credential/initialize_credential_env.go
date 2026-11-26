@@ -100,6 +100,7 @@ func bindEnvVariables(v *viper.Viper) {
 	v.BindEnv("application.env")
 	v.BindEnv("application.port")
 	v.BindEnv("application.mode")
+	v.BindEnv("application.cors_allowed_origins")
 
 	// Database
 	v.BindEnv("db.configs.host")
