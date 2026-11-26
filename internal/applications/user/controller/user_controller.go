@@ -105,6 +105,10 @@ func (controller *UserController) UpdateProfile(ctx echo.Context) error {
 		return err
 	}
 
+	if err := req.Validate(); err != nil {
+		return err
+	}
+
 	result, err := controller.authService.UpdateProfile(ctx.Request().Context(), header.UserID, req)
 	if err != nil {
 		return err
