@@ -1,6 +1,10 @@
 package credential
 
-import "fmt"
+import (
+	"fmt"
+	"slices"
+	"strings"
+)
 
 type AppConfig struct {
 	Application ApplicationConfig `mapstructure:"application"`
@@ -98,7 +102,16 @@ func NewAppConfig() *AppConfig {
 	}
 }
 
+// validEnvs lists the accepted values of application.env. Matching is exact on
+// purpose: a typo such as "prod" must stop the app, not run it as non-production.
+var validEnvs = []string{"development", "staging", "production"}
+
 func (c *AppConfig) Validate() error {
+	if !slices.Contains(validEnvs, c.Application.Env) {
+		return fmt.Errorf("application.env must be one of %s, got %q",
+			strings.Join(validEnvs, ", "), c.Application.Env)
+	}
+
 	if c.Database.Configs.User == "" {
 		return fmt.Errorf("db.configs.user is required")
 	}
