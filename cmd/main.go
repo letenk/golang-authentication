@@ -17,6 +17,16 @@ import (
 	rest "github.com/letenk/golang-authentication/internal/adapter/rest"
 )
 
+// @title			Go Auth System API
+// @version		1.0
+// @description	Authentication boilerplate API: register, login, token refresh, sessions, email verification and password reset.
+// @description	Successful and failed responses share one envelope: {code, message, data, error, errors, serverTime}.
+// @BasePath		/api/v1
+//
+// @securityDefinitions.apikey	BearerAuth
+// @in							header
+// @name						Authorization
+// @description				Type "Bearer", a space, then the access token from /auth/login. Note: after calling /auth/login on this page the browser also stores the access_token cookie, which protected endpoints accept when no Authorization header is sent.
 func main() {
 	e := echo.New()
 
