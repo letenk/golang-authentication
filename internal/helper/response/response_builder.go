@@ -9,12 +9,12 @@ import (
 )
 
 type body struct {
-	ErrorCode  int                `json:"code"`
-	Message    string             `json:"message"`
-	Data       interface{}        `json:"data"`
-	Error      string             `json:"error,omitempty"`
+	ErrorCode  int                 `json:"code"`
+	Message    string              `json:"message"`
+	Data       interface{}         `json:"data"`
+	Error      string              `json:"error,omitempty"`
 	Errors     map[string][]string `json:"errors,omitempty"`
-	ServerTime string             `json:"serverTime"`
+	ServerTime string              `json:"serverTime"`
 }
 
 func Base(ctx echo.Context, httpCode int, errorCode int, message string, data interface{}, err error) error {
