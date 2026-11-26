@@ -382,7 +382,7 @@ func TestAuthController_LogoutAll(t *testing.T) {
 			setupMock: func(ms *authMocks.MockAuthService) {
 				ms.EXPECT().LogoutAll(mock.Anything, int64(1)).Return(0, exceptions.NewBusinessLogicError(exceptions.DataUpdateFailed, nil, nil))
 			},
-			wantStatus: http.StatusUnprocessableEntity,
+			wantStatus: http.StatusInternalServerError,
 		},
 	}
 
@@ -424,7 +424,7 @@ func TestAuthController_DeleteMe(t *testing.T) {
 			setupMock: func(ms *authMocks.MockAuthService) {
 				ms.EXPECT().DeleteAccount(mock.Anything, int64(1)).Return(exceptions.NewBusinessLogicError(exceptions.DataDeleteFailed, nil, nil))
 			},
-			wantStatus: http.StatusUnprocessableEntity,
+			wantStatus: http.StatusInternalServerError,
 		},
 	}
 

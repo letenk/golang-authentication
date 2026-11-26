@@ -55,7 +55,7 @@ func FormatValidationErrorMap(err error) map[string][]string {
 		for _, fe := range ve {
 			field := strings.ToLower(fe.Field())
 			message := formatFieldError(fe)
-			
+
 			// Add error message to field's error array
 			errorMap[field] = append(errorMap[field], message)
 		}

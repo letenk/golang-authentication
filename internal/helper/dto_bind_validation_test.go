@@ -24,7 +24,6 @@ func (cv *CustomValidator) Validate(i interface{}) error {
 	return cv.validator.Struct(i)
 }
 
-
 func TestBindAndValidate(t *testing.T) {
 	e := echo.New()
 	e.Validator = &CustomValidator{
