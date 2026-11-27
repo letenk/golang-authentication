@@ -201,6 +201,62 @@ The spec is generated from comments on the handlers. After changing an endpoint 
 
 ---
 
+## Using This Boilerplate
+
+Releases are git tags (`v1.1.0`, `v1.2.0`, ...). [CHANGELOG.md](CHANGELOG.md) lists what changed in each one, with upgrade notes for breaking changes. Versions stay on `v1`: Go only accepts a `v2+` tag when the module path ends in `/v2`, and a template that nobody imports gains nothing from that rename.
+
+A boilerplate is copied, not imported, so a new project does not follow new versions automatically. The steps below keep an untouched copy of the boilerplate on a `boilerplate` branch, so every update is an ordinary `git merge`: files you never changed update cleanly, and files you customized show normal conflict markers.
+
+The examples use `github.com/you/your-app` as the new module path and `v1.1.0` → `v1.2.0` as versions.
+
+### Start a new project
+
+```bash
+go run golang.org/x/tools/cmd/gonew@latest \
+  github.com/letenk/golang-authentication@v1.1.0 github.com/you/your-app
+cd your-app
+
+# gonew rewrites Go import paths only; two files hold the old path as plain text
+sed -i.bak 's#github.com/letenk/golang-authentication#github.com/you/your-app#g' \
+  .mockery.yaml internal/archtest/layering_test.go && rm -f .mockery.yaml.bak internal/archtest/layering_test.go.bak
+
+git init -b main
+git add -A && git commit -m "chore: start from boilerplate v1.1.0"
+git branch boilerplate          # untouched copy, used for future updates
+```
+
+Skipping the `sed` step does not break the build, but `internal/archtest` then silently stops checking imports of `configs/database`.
+
+Then make it your project: `cp .env-example .env` and fill it in (`APPLICATION_CORS_ALLOWED_ORIGINS` is required in production), change `APPLICATION_NAME`, the Swagger `@title` in `cmd/main.go` (then `make swagger`), and this README. Run `make test`.
+
+### Update to a newer boilerplate version
+
+Read the version's entry in `CHANGELOG.md` first, especially its upgrade notes. Then:
+
+```bash
+# 1. Put the new version on the boilerplate branch
+git switch boilerplate
+find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+go run golang.org/x/tools/cmd/gonew@latest \
+  github.com/letenk/golang-authentication@v1.2.0 github.com/you/your-app ../boilerplate-tmp
+cp -R ../boilerplate-tmp/. . && rm -rf ../boilerplate-tmp
+sed -i.bak 's#github.com/letenk/golang-authentication#github.com/you/your-app#g' \
+  .mockery.yaml internal/archtest/layering_test.go && rm -f .mockery.yaml.bak internal/archtest/layering_test.go.bak
+git add -A && git commit -m "chore: boilerplate v1.2.0"
+
+# 2. Merge it into your project on a branch, resolve conflicts, test, open a PR
+git switch main
+git switch -c chore/boilerplate-v1.2.0
+git merge boilerplate
+make test
+```
+
+Never commit your own changes to the `boilerplate` branch; it must stay identical to the boilerplate release so that git can tell your changes from upstream ones.
+
+### Database migrations from the boilerplate
+
+Migration files are named by timestamp, so a migration that arrives in an update can be older than migrations your project already applied. `make migration-up` handles this: the bundled migration binary runs Goose with `WithAllowMissing`, which applies such older files. If you run the `goose` CLI directly instead, pass `-allow-missing`. Check the upgrade notes for migrations that drop or rewrite data.
+
 ## Getting Started
 
 ### Prerequisites
